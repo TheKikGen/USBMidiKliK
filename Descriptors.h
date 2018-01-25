@@ -41,30 +41,23 @@
 	#define USB_DESCRIPTOR_STRING L"KikGen MIDI factory"
 	#define PRODUCT_STRING 				L"KloK MIDI Clock"
 
-	/* Specify the Vender ID and Arduino model using the assigned PID.
-	This is used by Descriptors.c
-	to set PID and product descriptor string specify the Arduino VID */
-//	USB\VID_2A03&PID_0043&REV_0001
-
-	#define ARDUINO_VID 0x2A03
-	// Uno V3:
-	#define ARDUINO_MODEL_PID 0x0043
-
-	//Mega 2560 PID:
-  //#define ARDUINO_MODEL_PID = 0x0010
-
-	// PID/VID for LUFA USB Serial Demo Application
-	//#  ATMEL VID
-	//# ARDUINO_VID = 0x03EB
-	// LUFA Serial Demo PID
-	// ARDUINO_MODEL_PID = 0x204B
-
 	/* Includes: */
-		#include <LUFA/Drivers/USB/USB.h>
+	#include <avr/pgmspace.h>
 
-		#include <avr/pgmspace.h>
+ #include <LUFA/Drivers/USB/USB.h>
 
+
+		/* Product-specific definitions: */
+		#define ARDUINO_UNO_PID		0x0001
+		#define ARDUINO_MEGA2560_PID	0x0010
+		#define ARDUINO_USBSERIAL_PID	0x003B
+		#define ARDUINO_MEGAADK_PID	0x003F
+		#define ARDUINO_MEGA2560R3_PID	0x0042
+		#define ARDUINO_UNOR3_PID	0x0043
+		#define ARDUINO_MEGAADKR3_PID	0x0044
 	/* Macros: */
+
+    ////////////////////////////////////////// MIDI //////////////////////////////
 		/** Endpoint address of the MIDI streaming data IN endpoint, for device-to-host data transfers. */
 		#define MIDI_STREAM_IN_EPADDR       (ENDPOINT_DIR_IN  | 1)
 
@@ -75,8 +68,9 @@
 		#define MIDI_STREAM_EPSIZE          64
 
 		/** Endpoint address of the CDC device-to-host notification IN endpoint. */
-		#define CDC_NOTIFICATION_EPADDR        (ENDPOINT_DIR_IN  | 2)
+		#define CDC_NOTIFICATION_EPADDR       (ENDPOINT_DIR_IN  | 2)
 
+    ///////////////////////////// CDC - Arduino ///////////////////////////////
 		/** Endpoint address of the CDC device-to-host data IN endpoint. */
 		#define CDC_TX_EPADDR                  (ENDPOINT_DIR_IN  | 3)
 
@@ -86,9 +80,14 @@
 		/** Size in bytes of the CDC device-to-host notification IN endpoint. */
 		#define CDC_NOTIFICATION_EPSIZE        8
 
-		/** Size in bytes of the CDC data IN and OUT endpoints. */
-		#define CDC_TXRX_EPSIZE                16
+		/** Size of the CDC data interface TX and RX data endpoint banks, in bytes. */
+		#define CDC_TX_EPSIZE                64
+		#define CDC_TX_BANK_SIZE 2
+		#define CDC_RX_EPSIZE                32
+		#define CDC_RX_BANK_SIZE 1
 
+		/** Size in bytes of the CDC data IN and OUT endpoints. */
+		#define CDC_TXRX_EPSIZE                64
 
 	/* Type Defines: */
 		/** Type define for the device configuration descriptor structure. This must be defined in the
@@ -158,7 +157,7 @@
 			STRING_ID_Language     = 0, /**< Supported Languages string descriptor ID (must be zero) */
 			STRING_ID_Manufacturer = 1, /**< Manufacturer string ID */
 			STRING_ID_Product      = 2, /**< Product string ID */
-			STRING_ID_Serial			 = 3, /**< Serial number string ID */
+			STRING_ID_Serial			 = 0xDC, /**< Serial number string ID */
 		};
 
 		/* Function Prototypes: */

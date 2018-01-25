@@ -15,51 +15,64 @@ const uint16_t TICK_COUNT = 5000;
 bool MIDIBootMode  = false;
 bool MIDIHighSpeed = false;	// 0: normal speed(31250bps), 1: high speed (1250000bps)
 
+// Ring Buffers
 
-/** Circular buffer to hold data from the host before it is sent to the device via the serial port. */
-static RingBuffer_t USBtoUSART_Buffer;
+static RingBuffer_t USBtoUSART_Buffer;           // Circular buffer to hold host data
+static uint8_t      USBtoUSART_Buffer_Data[128]; // USB to USART_Buffer
+static RingBuffer_t USARTtoUSB_Buffer;           // Circular buffer to hold data from the serial port
+static uint8_t      USARTtoUSB_Buffer_Data[128]; // USART to USB_Buffer
 
-/** Underlying data buffer for \ref USBtoUSART_Buffer, where the stored bytes are located. */
-static uint8_t      USBtoUSART_Buffer_Data[128];
-
-/** Circular buffer to hold data from the serial port before it is sent to the host. */
-static RingBuffer_t USARTtoUSB_Buffer;
-
-/** Underlying data buffer for \ref USARTtoUSB_Buffer, where the stored bytes are located. */
-static uint8_t      USARTtoUSB_Buffer_Data[128];
-/** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
- *  used like any regular character stream in the C APIs.
+/** LUFA MIDI Class driver interface configuration and state information.
  */
-static FILE USBSerialStream;
+	USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface =
+		{
+			.Config =
+				{
+					.StreamingInterfaceNumber = INTERFACE_ID_AudioStream,
+					.DataINEndpoint           =
+						{
+							.Address          = MIDI_STREAM_IN_EPADDR,
+							.Size             = MIDI_STREAM_EPSIZE,
+							.Banks            = 1,
+						},
+					.DataOUTEndpoint           =
+						{
+							.Address          = MIDI_STREAM_OUT_EPADDR,
+							.Size             = MIDI_STREAM_EPSIZE,
+							.Banks            = 1,
+						},
+				},
+		};
+
 /** LUFA CDC Class driver interface configuration and state information. This structure is
  *  passed to all CDC Class driver functions, so that multiple instances of the same class
  *  within a device can be differentiated from one another.
  */
-USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
-	{
-		.Config =
-			{
-				.ControlInterfaceNumber         = INTERFACE_ID_CDC_CCI,
-				.DataINEndpoint                 =
-					{
-						.Address                = CDC_TX_EPADDR,
-						.Size                   = CDC_TXRX_EPSIZE,
-						.Banks                  = 1,
-					},
-				.DataOUTEndpoint                =
-					{
-						.Address                = CDC_RX_EPADDR,
-						.Size                   = CDC_TXRX_EPSIZE,
-						.Banks                  = 1,
-					},
-				.NotificationEndpoint           =
-					{
-						.Address                = CDC_NOTIFICATION_EPADDR,
-						.Size                   = CDC_NOTIFICATION_EPSIZE,
-						.Banks                  = 1,
-					},
-			},
-	};
+	USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
+		{
+			.Config =
+				{
+					.ControlInterfaceNumber         = INTERFACE_ID_CDC_CCI,
+					.DataINEndpoint                 =
+						{
+							.Address                = CDC_TX_EPADDR,
+							.Size                   = CDC_TXRX_EPSIZE,
+							.Banks                  = 1,
+						},
+					.DataOUTEndpoint                =
+						{
+							.Address                = CDC_RX_EPADDR,
+							.Size                   = CDC_TXRX_EPSIZE,
+							.Banks                  = 1,
+						},
+					.NotificationEndpoint           =
+						{
+							.Address                = CDC_NOTIFICATION_EPADDR,
+							.Size                   = CDC_NOTIFICATION_EPSIZE,
+							.Banks                  = 1,
+						},
+				},
+		};
 
 ///////////////////////////////////////////////////////////////////////////////
 // MAIN
@@ -68,23 +81,11 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 int main(void)
 {
 	SetupHardware();
-	/* Create a regular blocking character stream for the interface so that it can be used with the stdio.h functions */
-	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
-
 	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
-	GlobalInterruptEnable();
-MIDIBootMode = false;
 
-	if (MIDIBootMode) {
-		sei();
-		processMIDI();
-	}
-	else {
-		RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
-		RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
-		sei();
-	  processUSBtoSerial();
-	}
+	if (MIDIBootMode) processMIDI();
+	else processUSBtoSerial();
+
 ///////////////////////////////////////////////////////////////////////////////
 }
 
@@ -105,11 +106,8 @@ void SetupHardware(void)
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
 
-	/* Disable clock division */
-	//clock_prescale_set(clock_div_1);
-	// DO NOT COMPILE ON atmega16u2. Lines below set prescale to clock div 1
-	CLKPR = (1 << CLKPCE);
-	CLKPR = (0 << CLKPS3) | (0 << CLKPS2) | (0 << CLKPS1) | (0 << CLKPS0);
+	// Disable clock division
+	clock_prescale_set(clock_div_1);
 
 #endif
 
@@ -122,22 +120,14 @@ void SetupHardware(void)
 	MIDIBootMode  = ( (PINB & 0x04) == 0 ) ? false : true;
 	MIDIHighSpeed = ( (PINB & 0x08) == 0 ) ? true  : false ;
 
-	if (MIDIBootMode) {
-		//UBRR1L = 1;		// 500K at 16MHz clock
+	MIDIBootMode = false; // debug
+  MIDIHighSpeed = false;
+
+  if (MIDIBootMode) {
 		if ( MIDIHighSpeed ) UBRR1L = 0;		// 1M at 16MHz clock
 		else 		UBRR1L = 31;								// 31250Hz at 16MHz clock
-		// Set Serial Interrupts
-		UCSR1B = 0;
-		UCSR1B = ((1 << RXCIE1) | (1 << TXEN1) | (1 << RXEN1));
 	}
-	else {
-    //Serial_Init(9600, false);
-		// https://github.com/ddiakopoulos/hiduino/issues/13
-		/* Target /ERASE line is active HIGH: there is a mosfet that inverts logic */
-		// These are defined in the makefile...
-		//AVR_ERASE_LINE_PORT |= AVR_ERASE_LINE_MASK;
-		//AVR_ERASE_LINE_DDR |= AVR_ERASE_LINE_MASK;
-	}
+	else Serial_Init(9600, false);
 
 	/* Hardware Initialization */
 	LEDs_Init();
@@ -147,10 +137,25 @@ void SetupHardware(void)
 	// push received bytes to the USB interface
 	TCCR0B = (1 << CS02);
 
+	/* Pull target /RESET line high */
+	AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
+	AVR_RESET_LINE_DDR  |= AVR_RESET_LINE_MASK;
 }
+
+
 ///////////////////////////////////////////////////////////////////////////////
 // USB Configuration
 ///////////////////////////////////////////////////////////////////////////////
+
+// Event handler for the library USB Connection event
+void EVENT_USB_Device_Connect(void) {
+	LEDs_SetAllLEDs(LEDMASK_USB_ENUMERATING);
+}
+
+// Event handler for the library USB Disconnection event
+void EVENT_USB_Device_Disconnect(void) {
+	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
+}
 
 // Event handler for the USB_ConfigurationChanged event. This is fired when the host set the current configuration
 // of the USB device after enumeration - the device endpoints are configured and the MIDI management task started.
@@ -159,44 +164,103 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	bool ConfigSuccess = true;
 
 	if (MIDIBootMode) {
-		/* Setup MIDI Data Endpoints */
-		ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_IN_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
-		ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_OUT_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
+		// Setup MIDI Data Endpoints
+		//ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_IN_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
+		//ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_OUT_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
+		ConfigSuccess &= MIDI_Device_ConfigureEndpoints(&Keyboard_MIDI_Interface);
+	}
+	else {
+    ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
 	}
 
-	else ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-
-
-	/* Indicate endpoint configuration success or failure */
 	LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
 }
 
-
-/** Event handler for the library USB Control Request reception event. */
+// Event handler for the library USB Control Request event.
 void EVENT_USB_Device_ControlRequest(void)
 {
-	if (!MIDIBootMode) CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
+	if (MIDIBootMode)
+	    MIDI_Device_ProcessControlRequest(&Keyboard_MIDI_Interface);
+	else
+	   CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
+// Event handler for the CDC Class driver Host-to-Device Line Encoding Changed event.
+void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo)
+{
+	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
 
+	if (CurrentDTRState)
+	  AVR_RESET_LINE_PORT &= ~AVR_RESET_LINE_MASK;
+	else
+	  AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
+}
+
+// Event handler for the CDC Class driver Line Encoding Changed event.
+void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo)
+{
+	uint8_t ConfigMask = 0;
+
+	switch (CDCInterfaceInfo->State.LineEncoding.ParityType)
+	{
+		case CDC_PARITY_Odd:
+			ConfigMask = ((1 << UPM11) | (1 << UPM10));
+			break;
+		case CDC_PARITY_Even:
+			ConfigMask = (1 << UPM11);
+			break;
+	}
+
+	if (CDCInterfaceInfo->State.LineEncoding.CharFormat == CDC_LINEENCODING_TwoStopBits)
+		ConfigMask |= (1 << USBS1);
+
+	switch (CDCInterfaceInfo->State.LineEncoding.DataBits)
+	{
+		case 6:
+			ConfigMask |= (1 << UCSZ10);
+			break;
+		case 7:
+			ConfigMask |= (1 << UCSZ11);
+			break;
+		case 8:
+			ConfigMask |= ((1 << UCSZ11) | (1 << UCSZ10));
+			break;
+	}
+
+	// Must turn off USART before reconfiguring it, otherwise incorrect operation may occur
+	UCSR1B = 0;
+	UCSR1A = 0;
+	UCSR1C = 0;
+
+	// Special case 57600 baud for compatibility with the ATmega328 bootloader.
+	UBRR1  = (CDCInterfaceInfo->State.LineEncoding.BaudRateBPS == 57600)
+			 ? SERIAL_UBBRVAL(CDCInterfaceInfo->State.LineEncoding.BaudRateBPS)
+			 : SERIAL_2X_UBBRVAL(CDCInterfaceInfo->State.LineEncoding.BaudRateBPS);
+
+	UCSR1C = ConfigMask;
+	UCSR1A = (CDCInterfaceInfo->State.LineEncoding.BaudRateBPS == 57600) ? 0 : (1 << U2X1);
+	UCSR1B = ((1 << RXCIE1) | (1 << TXEN1) | (1 << RXEN1));
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Serial Worker Functions
 ///////////////////////////////////////////////////////////////////////////////
-void processUSBtoSerial(void) {
 
-///////////////////////  LOOP /////////////////////////////////////////////////
+static void processUSBtoSerial(void) {
+
+	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
+	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
+	GlobalInterruptEnable();
+
+           ///////////////////////  INFINITE LOOP /////////////////////////
 	for (;;)
 		{
-		 /* Only try to read in bytes from the CDC interface if the transmit buffer is not full */
-//uint8_t ColourUpdate = fgetc(&USBSerialStream);
-//fputc(&USBSerialStream, ColourUpdate);
-
+		 // Only try to read in bytes from the CDC interface if the transmit buffer is not full
 
 		 if (!(RingBuffer_IsFull(&USBtoUSART_Buffer))) {
 
 			 int16_t ReceivedByte = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-			 /* Store received byte into the USART transmit buffer */
+			 // Store received byte into the USART transmit buffer
 			 if (!(ReceivedByte < 0))
 				 RingBuffer_Insert(&USBtoUSART_Buffer, ReceivedByte);
 		 }
@@ -205,25 +269,25 @@ void processUSBtoSerial(void) {
 		 if (BufferCount) {
 			 Endpoint_SelectEndpoint(VirtualSerial_CDC_Interface.Config.DataINEndpoint.Address);
 
-			 /* Check if a packet is already enqueued to the host - if so, we shouldn't try to send more data
-				* until it completes as there is a chance nothing is listening and a lengthy timeout could occur */
+			 // Check if a packet is already enqueued to the host - if so, we shouldn't try to send more data
+			// until it completes as there is a chance nothing is listening and a lengthy timeout could occur
 			 if (Endpoint_IsINReady()) {
-				 /* Never send more than one bank size less one byte to the host at a time, so that we don't block
-					* while a Zero Length Packet (ZLP) to terminate the transfer is sent if the host isn't listening */
+				 // Never send more than one bank size less one byte to the host at a time, so that we don't block
+			// while a Zero Length Packet (ZLP) to terminate the transfer is sent if the host isn't listening
 				 uint8_t BytesToSend = MIN(BufferCount, (CDC_TXRX_EPSIZE - 1));
 
-				 /* Read bytes from the USART receive buffer into the USB IN endpoint */
+				 // Read bytes from the USART receive buffer into the USB IN endpoint
 				 while (BytesToSend--) {
-					 /* Try to send the next byte of data to the host, abort if there is an error without dequeuing */
+					 // Try to send the next byte of data to the host, abort if there is an error without dequeuing
 					 if (CDC_Device_SendByte(&VirtualSerial_CDC_Interface,
 											 RingBuffer_Peek(&USARTtoUSB_Buffer)) != ENDPOINT_READYWAIT_NoError) break;
-					 /* Dequeue the already sent byte from the buffer now we have confirmed that no transmission error occurred */
+					 // Dequeue the already sent byte from the buffer now we have confirmed that no transmission error occurred
 					 RingBuffer_Remove(&USARTtoUSB_Buffer);
 				 }
 			 }
 		 }
 
-		 /* Load the next byte from the USART transmit buffer into the USART if transmit buffer space is available */
+		 // Load the next byte from the USART transmit buffer into the USART if transmit buffer space is available
 		 if (Serial_IsSendReady() && !(RingBuffer_IsEmpty(&USBtoUSART_Buffer))  )
 			 Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
 
@@ -232,32 +296,21 @@ void processUSBtoSerial(void) {
 	 }
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
 // MIDI Worker Functions
 ///////////////////////////////////////////////////////////////////////////////
 
-void processMIDI(void) {
+static void processMIDI(void) {
 
+  GlobalInterruptEnable();
+           ///////////////////////  INFINITE LOOP /////////////////////////
 	for (;;) {
-		if (tx_ticks > 0)
-		{
-			tx_ticks--;
-		}
-		else if (tx_ticks == 0)
-		{
-			LEDs_TurnOffLEDs(LEDS_LED2);
-		}
 
-		if (rx_ticks > 0)
-		{
-			rx_ticks--;
-		}
-		else if (rx_ticks == 0)
-		{
-			LEDs_TurnOffLEDs(LEDS_LED1);
-		}
+		if (tx_ticks > 0) tx_ticks--;
+		else if (tx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED2);
+
+		if (rx_ticks > 0) rx_ticks--;
+		else if (rx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED1);
 
 		MIDI_To_Arduino();
 		MIDI_To_Host();
@@ -267,7 +320,7 @@ void processMIDI(void) {
 
 
 // From Arduino/Serial to USB/Host
-void MIDI_To_Host(void) {
+static void MIDI_To_Host(void) {
 	// Device must be connected and configured for the task to run
 	if (USB_DeviceState != DEVICE_STATE_Configured) return;
 
@@ -294,7 +347,7 @@ void MIDI_To_Host(void) {
 }
 
 // From USB/Host to Arduino/Serial
-void MIDI_To_Arduino(void)
+static void MIDI_To_Arduino(void)
 {
 	// Device must be connected and configured for the task to run
 	if (USB_DeviceState != DEVICE_STATE_Configured) return;
@@ -335,15 +388,17 @@ void MIDI_To_Arduino(void)
 // Parse via Arduino/Serial
 ISR(USART1_RX_vect, ISR_BLOCK)
 {
+	const uint8_t extracted = UDR1;
+
 	// Device must be connected and configured for the task to run
 	if (USB_DeviceState != DEVICE_STATE_Configured) return;
 
-	const uint8_t extracted = UDR1;
+	if (! MIDIBootMode ) {
 
-	if (!MIDIBootMode) {
 		if ( !(RingBuffer_IsFull(&USARTtoUSB_Buffer)))
-			RingBuffer_Insert(&USARTtoUSB_Buffer, extracted);
-			return;
+			     RingBuffer_Insert(&USARTtoUSB_Buffer, extracted);
+
+		return;
 	}
 
 	// Borrowed + Modified from Francois Best's Arduino MIDI Library

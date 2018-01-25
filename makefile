@@ -13,14 +13,16 @@
 
 MCU          = atmega16u2
 ARCH         = AVR8
-BOARD        = UNO
+BOARD        = BOARD_UNO
 F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
 TARGET       = arduino_midi_dual
 SRC          = 	$(TARGET).c Descriptors.c	$(LUFA_SRC_USB) \
 								$(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c  \
-								$(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
+								$(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c \
+								$(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c \
+							  $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
 LUFA_PATH    = ../../LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS     =
@@ -37,9 +39,9 @@ CC_FLAGS += -DAVR_ERASE_LINE_MASK="(1 << 6)"
 #   to set PID and product descriptor string
 
 # Specify the Arduino VID
-ARDUINO_VID = 0x2341
+#ARDUINO_VID = 0x2341
 # Uno PID:
-ARDUINO_MODEL_PID = 0x0001
+#ARDUINO_MODEL_PID = 0x0001
 # Mega 2560 PID:
 #ARDUINO_MODEL_PID = 0x0010
 
@@ -50,8 +52,8 @@ ARDUINO_MODEL_PID = 0x0001
 # ARDUINO_MODEL_PID = 0x204B
 
 # Optional Variables
-AVRDUDE_PROGRAMMER = avrisp2
-ARDUINO_MODEL_PID = 0x0010
+#AVRDUDE_PROGRAMMER = avrisp2
+#ARDUINO_MODEL_PID = 0x0010
 
 # Default target
 all:
