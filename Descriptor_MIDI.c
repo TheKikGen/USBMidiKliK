@@ -28,6 +28,14 @@
   this software.
 */
 
+
+// MIDI USB INTERFACE
+
+	#define DEVICE_VENDORID_MIDI  0x2912
+	#define DEVICE_PRODUCTID_MIDI 0x1968
+	const USB_Descriptor_String_t PROGMEM ManufacturerStringMIDI = USB_STRING_DESCRIPTOR(L"KikGen MIDI factory");
+	const USB_Descriptor_String_t PROGMEM ProductStringMIDI = USB_STRING_DESCRIPTOR(L"KikGen USB-MIDI");
+
 // MIDI DEVICE DESCRIPTOR
 
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall
@@ -47,8 +55,8 @@ const USB_Descriptor_Device_t PROGMEM DeviceDescriptorMIDI =  // MIDI
 
 	.Endpoint0Size          = FIXED_CONTROL_ENDPOINT_SIZE,
 
-	.VendorID               = 0x2912,
-	.ProductID              = 0x1967,
+	.VendorID               = DEVICE_VENDORID_MIDI,
+	.ProductID              = DEVICE_PRODUCTID_MIDI,
 	.ReleaseNumber          = VERSION_BCD(0,0,1),
 
 	.ManufacturerStrIndex   = STRING_ID_Manufacturer,
@@ -237,15 +245,3 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptorMIDI = // MI
 			.AssociatedJackID         = {0x03}
 		}
 };
-
-/** Manufacturer descriptor string. This is a Unicode string containing the manufacturer's details in human readable
- *  form, and is read out upon request by the host when the appropriate string ID is requested, listed in the Device
- *  Descriptor.
- */
-const USB_Descriptor_String_t PROGMEM ManufacturerStringMIDI = USB_STRING_DESCRIPTOR(USB_DESCRIPTOR_STRING);
-
-/** Product descriptor string. This is a Unicode string containing the product's details in human readable form,
- *  and is read out upon request by the host when the appropriate string ID is requested, listed in the Device
- *  Descriptor.
- */
-const USB_Descriptor_String_t PROGMEM ProductStringMIDI = USB_STRING_DESCRIPTOR(PRODUCT_STRING);

@@ -36,25 +36,10 @@
 #ifndef _DESCRIPTORS_H_
 #define _DESCRIPTORS_H_
 
+		/* Includes: */
+		#include <avr/pgmspace.h>
+		#include <LUFA/Drivers/USB/USB.h>
 
-// MIDI
-	#define USB_DESCRIPTOR_STRING L"KikGen MIDI factory"
-	#define PRODUCT_STRING 				L"KloK MIDI Clock"
-
-	/* Includes: */
-	#include <avr/pgmspace.h>
-
- #include <LUFA/Drivers/USB/USB.h>
-
-
-		/* Product-specific definitions: */
-		#define ARDUINO_UNO_PID		0x0001
-		#define ARDUINO_MEGA2560_PID	0x0010
-		#define ARDUINO_USBSERIAL_PID	0x003B
-		#define ARDUINO_MEGAADK_PID	0x003F
-		#define ARDUINO_MEGA2560R3_PID	0x0042
-		#define ARDUINO_UNOR3_PID	0x0043
-		#define ARDUINO_MEGAADKR3_PID	0x0044
 	/* Macros: */
 
     ////////////////////////////////////////// MIDI //////////////////////////////

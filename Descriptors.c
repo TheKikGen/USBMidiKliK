@@ -39,7 +39,10 @@
 
 extern bool MIDIBootMode;
 
+// Only one MIDI device below
+//#include "Descriptor_MIDI_KloK.c"
 #include "Descriptor_MIDI.c"
+
 #include "Descriptor_CDC_ArduinoUno.c"
 
 /** Language descriptor structure. This descriptor, located in FLASH memory, is returned when the host requests

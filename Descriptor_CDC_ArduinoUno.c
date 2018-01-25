@@ -28,17 +28,21 @@
   this software.
 */
 
+  // GENUINE ARDUINO UNO V3
+
+	#define DEVICE_VENDORID_CDC  0x2A03
+	#define DEVICE_PRODUCTID_CDC 0x0043
+	const USB_Descriptor_String_t PROGMEM ManufacturerStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Srl (www.arduino.org)");
+	const USB_Descriptor_String_t PROGMEM ProductStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Uno");
+	const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(L"854393131303513111B1");
+
+// CD DEVICE DESCRIPTOR
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall
  *  device characteristics, including the supported USB version, control endpoint size and the
  *  number of device configurations. The descriptor is read out by the USB host when the enumeration
  *  process begins.
  */
 
-// CDC DSECRIPTOR FOR A GENUINE ARDUINO UNO V3
-/* idVendor                 : 0x2A03
-   idProduct                : 0x0043
-   bcdDevice                : 0x0001
-*/
 const USB_Descriptor_Device_t PROGMEM DeviceDescriptorCDC =
 {
 	.Header                 = {.Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device},
@@ -50,8 +54,8 @@ const USB_Descriptor_Device_t PROGMEM DeviceDescriptorCDC =
 
 	.Endpoint0Size          = FIXED_CONTROL_ENDPOINT_SIZE,
 
-	.VendorID               = 0x2A03,
-	.ProductID              = 0x0043,
+	.VendorID               = DEVICE_VENDORID_CDC,
+	.ProductID              = DEVICE_PRODUCTID_CDC,
 	.ReleaseNumber          = VERSION_BCD(0,0,1),
 
 	.ManufacturerStrIndex   = STRING_ID_Manufacturer,
@@ -242,29 +246,3 @@ bInterval                : 0x01 (ignored)
 				.PollingIntervalMS      = 0x01
 			}
 };
-
-/** Manufacturer descriptor string. This is a Unicode string containing the manufacturer's details in human readable
- *  form, and is read out upon request by the host when the appropriate string ID is requested, listed in the Device
- *  Descriptor.
-
- ------ String Descriptor 0 ------
-bLength                  : 0x04 (4 bytes)
-bDescriptorType          : 0x03 (String Descriptor)
-Language ID[0]           : 0x0409 (English - United States)
- ------ String Descriptor 1 ------
-bLength                  : 0x32 (50 bytes)
-bDescriptorType          : 0x03 (String Descriptor)
-Language 0x0409          : "Arduino Srl            ø"  *!*ERROR  contains 1 NULL character
- ------ String Descriptor 2 ------
-bLength                  : 0x18 (24 bytes)
-bDescriptorType          : 0x03 (String Descriptor)
-Language 0x0409          : "Arduino Uno"
- ----- String Descriptor 0xDC -----
-bLength                  : 0x2A (42 bytes)
-bDescriptorType          : 0x03 (String Descriptor)
-Language 0x0409          : "854393131303513111B1"
-
-*/
-const USB_Descriptor_String_t PROGMEM ManufacturerStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Srl (www.arduino.org)");
-const USB_Descriptor_String_t PROGMEM ProductStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Uno");
-const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(L"854393131303513111B1");
