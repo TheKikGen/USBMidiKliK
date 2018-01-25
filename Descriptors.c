@@ -39,8 +39,8 @@
 
 extern bool MIDIBootMode;
 
-#include "MIDI_Descriptor.c"
-#include "CDC_Descriptor_ArduinoUno.c"
+#include "Descriptor_MIDI.c"
+#include "Descriptor_CDC_ArduinoUno.c"
 
 /** Language descriptor structure. This descriptor, located in FLASH memory, is returned when the host requests
  *  the string descriptor with index 0 (the first index). It is actually an array of 16-bit integers, which indicate
@@ -68,7 +68,7 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 	{
 		case DTYPE_Device:
 			if (MIDIBootMode) 			Address = &DeviceDescriptorMIDI;
-			else 			Address = &DeviceDescriptorArduino;
+			else 			Address = &DeviceDescriptorCDC;
 
 			Size    = sizeof(USB_Descriptor_Device_t);
 			break;
@@ -79,7 +79,7 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 				Size    = sizeof(USB_Descriptor_Configuration_t);
 			}
 			else {
-				Address = &ConfigurationDescriptorArduino;
+				Address = &ConfigurationDescriptorCDC;
 				Size    = sizeof(USB_Descriptor_ConfigurationCDC_t);
 			}
 			break;
@@ -98,8 +98,8 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 						Size    = pgm_read_byte(&ManufacturerStringMIDI.Header.Size);
 					}
 					else {
-						Address = &ManufacturerStringArduino;
-						Size    = pgm_read_byte(&ManufacturerStringArduino.Header.Size);
+						Address = &ManufacturerStringCDC;
+						Size    = pgm_read_byte(&ManufacturerStringCDC.Header.Size);
 					}
 					break;
 
@@ -108,15 +108,15 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 						Address = &ProductStringMIDI;
 						Size    = pgm_read_byte(&ProductStringMIDI.Header.Size);
 					} else {
-						Address = &ProductStringArduino;
-						Size    = pgm_read_byte(&ProductStringArduino.Header.Size);
+						Address = &ProductStringCDC;
+						Size    = pgm_read_byte(&ProductStringCDC.Header.Size);
 					}
 					break;
 
 				case STRING_ID_Serial:
 						if (!MIDIBootMode) {
-							Address = &ProductSerialNoArduino;
-							Size    = pgm_read_byte(&ProductSerialNoArduino.Header.Size);
+							Address = &ProductSerialCDC;
+							Size    = pgm_read_byte(&ProductSerialCDC.Header.Size);
 						}
 						break;
 			}

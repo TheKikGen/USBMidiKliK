@@ -34,12 +34,12 @@
  *  process begins.
  */
 
-// ARDUINO UNO
+// CDC DSECRIPTOR FOR A GENUINE ARDUINO UNO V3
 /* idVendor                 : 0x2A03
    idProduct                : 0x0043
-  bcdDevice                : 0x0001
+   bcdDevice                : 0x0001
 */
-const USB_Descriptor_Device_t PROGMEM DeviceDescriptorArduino =
+const USB_Descriptor_Device_t PROGMEM DeviceDescriptorCDC =
 {
 	.Header                 = {.Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device},
 
@@ -81,7 +81,7 @@ D4..0: Reserved, set 0  : 0x00
 MaxPower                 : 0x32 (100 mA)
  */
 
-const USB_Descriptor_ConfigurationCDC_t PROGMEM ConfigurationDescriptorArduino =
+const USB_Descriptor_ConfigurationCDC_t PROGMEM ConfigurationDescriptorCDC =
 {
 	.Config =
 		{
@@ -265,6 +265,6 @@ bDescriptorType          : 0x03 (String Descriptor)
 Language 0x0409          : "854393131303513111B1"
 
 */
-const USB_Descriptor_String_t PROGMEM ManufacturerStringArduino = USB_STRING_DESCRIPTOR(L"Arduino Srl (www.arduino.org)");
-const USB_Descriptor_String_t PROGMEM ProductStringArduino = USB_STRING_DESCRIPTOR(L"Arduino Uno");
-const USB_Descriptor_String_t PROGMEM ProductSerialNoArduino = USB_STRING_DESCRIPTOR(L"854393131303513111B1");
+const USB_Descriptor_String_t PROGMEM ManufacturerStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Srl (www.arduino.org)");
+const USB_Descriptor_String_t PROGMEM ProductStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Uno");
+const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(L"854393131303513111B1");

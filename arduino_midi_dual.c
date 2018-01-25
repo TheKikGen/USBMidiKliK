@@ -1,9 +1,17 @@
 /***********************************************************************
- *  arduino_midi firmware, 02.01.2015
- *  by Dimitri Diakopoulos (http://www.dimitridiakopoulos.com)
- *  Based on the LUFA low-level midi example by Dean Camera
- *  (http://www.fourwalledcubicle.com/LUFA.php)
- *  Compiled against LUFA-140928
+ *  ARDUINO_MIDI_DUAL FIRMWARE -
+ *  Franck Touanen - 2017.01.16
+ *
+ *  Based on :
+ *     . The wonderful LUFA low-level midi lib and examples by Dean Camera
+ *               (http://www.fourwalledcubicle.com/LUFA.php)
+ *     . Inspired by HIDUINO by Dimitri Diakopoulos
+ *               (http://www.dimitridiakopoulos.com)
+ *     . Inspired also by dualMocoLUFA Project by morecat_la
+ *               (http://morecatlab.akiba.coocan.jp/)
+ *     .
+ *
+ *  Compiled against the last LUFA version
  ***********************************************************************/
 
 #include "arduino_midi_dual.h"
@@ -75,7 +83,7 @@ static uint8_t      USARTtoUSB_Buffer_Data[128]; // USART to USB_Buffer
 		};
 
 ///////////////////////////////////////////////////////////////////////////////
-// MAIN
+// MAIN START HERE
 ///////////////////////////////////////////////////////////////////////////////
 
 int main(void)
@@ -90,17 +98,19 @@ int main(void)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// SETUP HARWARE WITH DUAL DESCRIPTORS : SERIAL / MIDI
+// SETUP HARWARE WITH DUAL BOOT SERIAL / MIDI
+//
+// WHEN PB2 IS GROUNDED during reset, this allows to reflash the MIDI application
+// firmware with the standard Arduino IDE without reflashing the usbserial bootloader.
+//
 // Original inspiration from dualMocoLUFA Project by morecat_lab
 //     http://morecatlab.akiba.coocan.jp/
 //
-// WHEN PB2 IS GROUNDED during reset, Arduino will reboot in "serial Arduino"
-// mode, allowing to change the sketch with the standard IDE
+// Note : When PB3 is grounded, this allows the HighSpeed mode for MIDI
 ///////////////////////////////////////////////////////////////////////////////
 
 void SetupHardware(void)
 {
-
 #if (ARCH == ARCH_AVR8)
 	// Disable watchdog if enabled by bootloader/fuses
 	MCUSR &= ~(1 << WDRF);
@@ -111,21 +121,22 @@ void SetupHardware(void)
 
 #endif
 
+	// Pins assignments :
 	// PB1 = LED
 	// PB2 = (MIDI/ Arduino SERIAL)
 	// PB3 = (NORMAL/HIGH) SPEED
+
   DDRB  = 0x02;		// SET PB1 as OUTPUT and PB2/PB3 as INPUT
   PORTB = 0x0C;		// PULL-UP PB2/PB3
 
 	MIDIBootMode  = ( (PINB & 0x04) == 0 ) ? false : true;
 	MIDIHighSpeed = ( (PINB & 0x08) == 0 ) ? true  : false ;
 
-	MIDIBootMode = false; // debug
-  MIDIHighSpeed = false;
-
   if (MIDIBootMode) {
-		if ( MIDIHighSpeed ) UBRR1L = 0;		// 1M at 16MHz clock
-		else 		UBRR1L = 31;								// 31250Hz at 16MHz clock
+		if ( MIDIHighSpeed ) Serial_Init(1250000, false);
+		else 		Serial_Init(31250, false);
+		// Set interrupt for MIDI (in usb serial this is set in EVENT_CDC_Device_LineEncodingChanged()
+		UCSR1B = ((1 << RXCIE1) | (1 << TXEN1) | (1 << RXEN1));
 	}
 	else Serial_Init(9600, false);
 
@@ -144,7 +155,7 @@ void SetupHardware(void)
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// USB Configuration
+// USB Configuration and  events
 ///////////////////////////////////////////////////////////////////////////////
 
 // Event handler for the library USB Connection event
@@ -165,9 +176,9 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 
 	if (MIDIBootMode) {
 		// Setup MIDI Data Endpoints
-		//ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_IN_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
-		//ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_OUT_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
-		ConfigSuccess &= MIDI_Device_ConfigureEndpoints(&Keyboard_MIDI_Interface);
+		ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_IN_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
+		ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_OUT_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
+		//ConfigSuccess &= MIDI_Device_ConfigureEndpoints(&Keyboard_MIDI_Interface);
 	}
 	else {
     ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
