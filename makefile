@@ -13,47 +13,54 @@
 
 MCU          = atmega16u2
 ARCH         = AVR8
-BOARD        = BOARD_UNO
+BOARD        = UNO
 F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
 TARGET       = arduino_midi_dual
-SRC          = 	$(TARGET).c Descriptors.c	$(LUFA_SRC_USB) \
-								$(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c  \
-								$(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c \
-								$(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c \
-							  $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
+SRC          = 	$(TARGET).cpp Descriptors.c
+SRC          += $(LUFA_SRC_USB)
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
+
+#SRC          += $(ARDUINO_MIDILIB)/MIDI.cpp
+
 LUFA_PATH    = ../../LUFA
+#ARDUINO_MIDILIB = ./MIDI/src
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS     =
 
-# Specifically for the Arduino Due
-CC_FLAGS += -DAVR_RESET_LINE_PORT="PORTC"
-CC_FLAGS += -DAVR_RESET_LINE_DDR="DDRC"
-CC_FLAGS += -DAVR_RESET_LINE_MASK="(1 << 7)"
-CC_FLAGS += -DAVR_ERASE_LINE_PORT="PORTC"
-CC_FLAGS += -DAVR_ERASE_LINE_DDR="DDRC"
-CC_FLAGS += -DAVR_ERASE_LINE_MASK="(1 << 6)"
+# ARDUINO DEVICE
+# Specify the Vender ID, Product ID and device name.
+# This is used by Descriptors.c
+# GENUINE ARDUINO UNO V3
 
-# Specify the Vender ID and Arduino model using the assigned PID.  This is used by Descriptors.c
-#   to set PID and product descriptor string
+ARDUINO_DEVICE_VENDORID							= 0x2A03
+ARDUINO_DEVICE_PRODUCTID 						= 0x0043
+ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino Srl (www.arduino.org)"
+ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Uno"
+ARDUINO_DEVICE_PRODUCT_SERIAL 			= "854393131303513111B1"
 
-# Specify the Arduino VID
-#ARDUINO_VID = 0x2341
-# Uno PID:
-#ARDUINO_MODEL_PID = 0x0001
-# Mega 2560 PID:
-#ARDUINO_MODEL_PID = 0x0010
+# MIDI DEVICE
+# Specify the Vender ID, Product ID and device name.
+# This is used by Descriptors.c
 
-# use PID/VID for LUFA USB Serial Demo Application
-#  ATMEL VID
-# ARDUINO_VID = 0x03EB
-# LUFA Serial Demo PID
-# ARDUINO_MODEL_PID = 0x204B
+MIDI_DEVICE_VENDORID								= 0x2912
+MIDI_DEVICE_PRODUCTID 							= 0x1968
+MIDI_DEVICE_MANUFACTURER_STRING 		= "KikGen MIDI factory"
+MIDI_DEVICE_PRODUCT_STRING 					= "KikGen USB-MIDI V2"
 
-# Optional Variables
-#AVRDUDE_PROGRAMMER = avrisp2
-#ARDUINO_MODEL_PID = 0x0010
+CC_FLAGS     += -DARDUINO_DEVICE_VENDORID=$(ARDUINO_DEVICE_VENDORID)
+CC_FLAGS     += -DARDUINO_DEVICE_PRODUCTID=$(ARDUINO_DEVICE_PRODUCTID)
+CC_FLAGS     += -DARDUINO_DEVICE_MANUFACTURER_STRING=$(ARDUINO_DEVICE_MANUFACTURER_STRING )
+CC_FLAGS     += -DARDUINO_DEVICE_PRODUCT_STRING=$(ARDUINO_DEVICE_PRODUCT_STRING)
+CC_FLAGS     += -DARDUINO_DEVICE_PRODUCT_SERIAL=$(ARDUINO_DEVICE_PRODUCT_SERIAL)
+CC_FLAGS     += -DMIDI_DEVICE_VENDORID=$(MIDI_DEVICE_VENDORID)
+CC_FLAGS     += -DMIDI_DEVICE_PRODUCTID=$(MIDI_DEVICE_PRODUCTID)
+CC_FLAGS     += -DMIDI_DEVICE_MANUFACTURER_STRING=$(MIDI_DEVICE_MANUFACTURER_STRING)
+CC_FLAGS     += -DMIDI_DEVICE_PRODUCT_STRING=$(MIDI_DEVICE_PRODUCT_STRING)
 
 # Default target
 all:

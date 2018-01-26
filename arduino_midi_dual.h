@@ -9,7 +9,7 @@
 #ifndef _arduino_midi_h
 #define _arduino_midi_h
 
-  #define BOARD BOARD_UNO
+  //#define BOARD BOARD_UNO
 
 	#include <avr/io.h>
 	#include <avr/wdt.h>
@@ -33,7 +33,6 @@
 
   #include <LUFA/Drivers/USB/Class/CDCClass.h>
 
-
 	#define LEDMASK_USB_NOTREADY      LEDS_LED1
 	#define LEDMASK_USB_ENUMERATING   LEDS_LED2
 	#define LEDMASK_USB_READY         LEDS_LED2
@@ -47,10 +46,12 @@
 	void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo);
 	void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo);
 
-	static void processMIDI(void);
-	static void MIDI_To_Arduino(void);
-	static void MIDI_To_Host(void);
-	static void processUSBtoSerial(void);
+	static  void processMIDI(void);
+	static  void processMIDItoUSB(void);
+	static  void processUSBtoMIDI(void);
+	static  void processUSBtoSerial(void);
+	static  void midiParse(uint8_t);
+	static void processMIDItoUSB_Bulk(void);
 
 	// MIDI Messages Type
 	typedef enum
@@ -85,8 +86,8 @@
 
 		MIDI_EventPacket_t mCompleteMessage;
 
-		MidiMessageType getStatus(MidiMessageType inType, uint8_t inChannel);
-		MidiMessageType getTypeFromStatusByte(uint8_t inStatus);
+		uint8_t getStatus(MidiMessageType inType, uint8_t inChannel);
+		uint8_t getTypeFromStatusByte(uint8_t inStatus);
 		uint8_t getChannelFromStatusByte(uint8_t inStatus);
 		bool isChannelMessage(uint8_t inType);
 

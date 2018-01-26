@@ -9,9 +9,10 @@
  *               (http://www.dimitridiakopoulos.com)
  *     . Inspired also by dualMocoLUFA Project by morecat_la
  *               (http://morecatlab.akiba.coocan.jp/)
- *     .
+ *	   . Francois Best's Arduino MIDI Library, for sure the best one !
+ *						(https://github.com/FortySevenEffects/arduino_midi_library)
  *
- *  Compiled against the last LUFA version
+ *  Compiled against the last LUFA version / MIDI library
  ***********************************************************************/
 
 #include "arduino_midi_dual.h"
@@ -30,68 +31,21 @@ static uint8_t      USBtoUSART_Buffer_Data[128]; // USB to USART_Buffer
 static RingBuffer_t USARTtoUSB_Buffer;           // Circular buffer to hold data from the serial port
 static uint8_t      USARTtoUSB_Buffer_Data[128]; // USART to USB_Buffer
 
-/** LUFA MIDI Class driver interface configuration and state information.
- */
-	USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface =
-		{
-			.Config =
-				{
-					.StreamingInterfaceNumber = INTERFACE_ID_AudioStream,
-					.DataINEndpoint           =
-						{
-							.Address          = MIDI_STREAM_IN_EPADDR,
-							.Size             = MIDI_STREAM_EPSIZE,
-							.Banks            = 1,
-						},
-					.DataOUTEndpoint           =
-						{
-							.Address          = MIDI_STREAM_OUT_EPADDR,
-							.Size             = MIDI_STREAM_EPSIZE,
-							.Banks            = 1,
-						},
-				},
-		};
-
-/** LUFA CDC Class driver interface configuration and state information. This structure is
- *  passed to all CDC Class driver functions, so that multiple instances of the same class
- *  within a device can be differentiated from one another.
- */
-	USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
-		{
-			.Config =
-				{
-					.ControlInterfaceNumber         = INTERFACE_ID_CDC_CCI,
-					.DataINEndpoint                 =
-						{
-							.Address                = CDC_TX_EPADDR,
-							.Size                   = CDC_TXRX_EPSIZE,
-							.Banks                  = 1,
-						},
-					.DataOUTEndpoint                =
-						{
-							.Address                = CDC_RX_EPADDR,
-							.Size                   = CDC_TXRX_EPSIZE,
-							.Banks                  = 1,
-						},
-					.NotificationEndpoint           =
-						{
-							.Address                = CDC_NOTIFICATION_EPADDR,
-							.Size                   = CDC_NOTIFICATION_EPSIZE,
-							.Banks                  = 1,
-						},
-				},
-		};
+extern USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface;
+extern USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface;
 
 ///////////////////////////////////////////////////////////////////////////////
 // MAIN START HERE
 ///////////////////////////////////////////////////////////////////////////////
 
-int main(void)
+int  main(void)
 {
+
 	SetupHardware();
 	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 
-	if (MIDIBootMode) processMIDI();
+	if (MIDIBootMode) processMIDI(); // Inifinite loop
+
 	else processUSBtoSerial();
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -135,8 +89,6 @@ void SetupHardware(void)
   if (MIDIBootMode) {
 		if ( MIDIHighSpeed ) Serial_Init(1250000, false);
 		else 		Serial_Init(31250, false);
-		// Set interrupt for MIDI (in usb serial this is set in EVENT_CDC_Device_LineEncodingChanged()
-		UCSR1B = ((1 << RXCIE1) | (1 << TXEN1) | (1 << RXEN1));
 	}
 	else Serial_Init(9600, false);
 
@@ -151,6 +103,8 @@ void SetupHardware(void)
 	/* Pull target /RESET line high */
 	AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
 	AVR_RESET_LINE_DDR  |= AVR_RESET_LINE_MASK;
+
+
 }
 
 
@@ -266,7 +220,7 @@ static void processUSBtoSerial(void) {
            ///////////////////////  INFINITE LOOP /////////////////////////
 	for (;;)
 		{
-		 // Only try to read in bytes from the CDC interface if the transmit buffer is not full
+		 // Only try to read bytes from the CDC interface if the transmit buffer is not full
 
 		 if (!(RingBuffer_IsFull(&USBtoUSART_Buffer))) {
 
@@ -313,8 +267,12 @@ static void processUSBtoSerial(void) {
 
 static void processMIDI(void) {
 
-  GlobalInterruptEnable();
-           ///////////////////////  INFINITE LOOP /////////////////////////
+	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
+  UCSR1B |= (1 << RXCIE1 ); // Enable the USART Receive Complete interrupt ( USART_RXC )
+	sei () ; // Enable the Global Interrupt Enable flag so that interrupts can be processe
+	//GlobalInterruptEnable();
+
+  ///////////////////////  INFINITE LOOP /////////////////////////
 	for (;;) {
 
 		if (tx_ticks > 0) tx_ticks--;
@@ -323,17 +281,25 @@ static void processMIDI(void) {
 		if (rx_ticks > 0) rx_ticks--;
 		else if (rx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED1);
 
-		MIDI_To_Arduino();
-		MIDI_To_Host();
+		// Device must be connected and configured for the task to run
+		if (USB_DeviceState == DEVICE_STATE_Configured) {
+		 	if (!(RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) )
+		 								midiParse(RingBuffer_Remove(&USARTtoUSB_Buffer));
+
+			processMIDItoUSB();
+			processUSBtoMIDI();
+
+		}
+
+    MIDI_Device_USBTask(&Keyboard_MIDI_Interface);
 		USB_USBTask();
 	}
 }
 
-
-// From Arduino/Serial to USB/Host
-static void MIDI_To_Host(void) {
-	// Device must be connected and configured for the task to run
-	if (USB_DeviceState != DEVICE_STATE_Configured) return;
+///////////////////////////////////////////////////////////////////////////////
+// ARDUINO SERIAL  TO HOST  MIDI IN
+///////////////////////////////////////////////////////////////////////////////
+static void processMIDItoUSB(void) {
 
 	// Select the MIDI IN stream
 	Endpoint_SelectEndpoint(MIDI_STREAM_IN_EPADDR);
@@ -357,20 +323,19 @@ static void MIDI_To_Host(void) {
 	}
 }
 
-// From USB/Host to Arduino/Serial
-static void MIDI_To_Arduino(void)
-{
-	// Device must be connected and configured for the task to run
-	if (USB_DeviceState != DEVICE_STATE_Configured) return;
+///////////////////////////////////////////////////////////////////////////////
+// HOST MIDI OUT TO ARDUINO SERIAL
+///////////////////////////////////////////////////////////////////////////////
 
-	// Select the MIDI OUT stream
+static void processUSBtoMIDI(void)
+{
+
 	Endpoint_SelectEndpoint(MIDI_STREAM_OUT_EPADDR);
 
 	/* Check if a MIDI command has been received */
 	if (Endpoint_IsOUTReceived())
 	{
 		MIDI_EventPacket_t MIDIEvent;
-
 		/* Read the MIDI event packet from the endpoint */
 		Endpoint_Read_Stream_LE(&MIDIEvent, sizeof(MIDIEvent), NULL);
 
@@ -389,7 +354,6 @@ static void MIDI_To_Arduino(void)
 			Endpoint_ClearOUT();
 		}
 	}
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -399,19 +363,15 @@ static void MIDI_To_Arduino(void)
 // Parse via Arduino/Serial
 ISR(USART1_RX_vect, ISR_BLOCK)
 {
-	const uint8_t extracted = UDR1;
+	RingBuffer_Insert(&USARTtoUSB_Buffer, UDR1);
+}
 
-	// Device must be connected and configured for the task to run
-	if (USB_DeviceState != DEVICE_STATE_Configured) return;
+///////////////////////////////////////////////////////////////////////////////
+// MIDI PARSER
+///////////////////////////////////////////////////////////////////////////////
 
-	if (! MIDIBootMode ) {
-
-		if ( !(RingBuffer_IsFull(&USARTtoUSB_Buffer)))
-			     RingBuffer_Insert(&USARTtoUSB_Buffer, extracted);
-
-		return;
-	}
-
+void midiParse(uint8_t extracted )
+{
 	// Borrowed + Modified from Francois Best's Arduino MIDI Library
 	// https://github.com/FortySevenEffects/arduino_midi_library
   if (mPendingMessageIndex == 0)
@@ -599,12 +559,12 @@ ISR(USART1_RX_vect, ISR_BLOCK)
 // MIDI Utility Functions
 ///////////////////////////////////////////////////////////////////////////////
 
-MidiMessageType getStatus(MidiMessageType inType, uint8_t inChannel)
+uint8_t getStatus(MidiMessageType inType, uint8_t inChannel)
 {
-    return ((uint8_t)inType | ((inChannel - 1) & 0x0f));
+    return (   inType |  ( (inChannel - 1) & 0x0f) );
 }
 
-MidiMessageType getTypeFromStatusByte(uint8_t inStatus)
+uint8_t getTypeFromStatusByte(uint8_t inStatus)
 {
     if ((inStatus  < 0x80) ||
         (inStatus == 0xf4) ||

@@ -28,13 +28,11 @@
   this software.
 */
 
-  // GENUINE ARDUINO UNO V3
-
-	#define DEVICE_VENDORID_CDC  0x2A03
-	#define DEVICE_PRODUCTID_CDC 0x0043
-	const USB_Descriptor_String_t PROGMEM ManufacturerStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Srl (www.arduino.org)");
-	const USB_Descriptor_String_t PROGMEM ProductStringCDC = USB_STRING_DESCRIPTOR(L"Arduino Uno");
-	const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(L"854393131303513111B1");
+#define DEVICE_VENDORID_CDC  ARDUINO_DEVICE_VENDORID
+#define DEVICE_PRODUCTID_CDC ARDUINO_DEVICE_PRODUCTID
+const USB_Descriptor_String_t PROGMEM ManufacturerStringCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_MANUFACTURER_STRING));
+const USB_Descriptor_String_t PROGMEM ProductStringCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_PRODUCT_STRING));
+const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_PRODUCT_SERIAL));
 
 // CD DEVICE DESCRIPTOR
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall

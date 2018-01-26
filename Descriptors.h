@@ -42,6 +42,13 @@
 
 	/* Macros: */
 
+		// Short macro to define wide chars (UTF8)
+		// Usually declared as L"MY WIDE STRING"
+		#ifndef _utf8
+			#define _widec(s) L ## #s
+			#define _utf8(s) _widec(s)
+		#endif
+
     ////////////////////////////////////////// MIDI //////////////////////////////
 		/** Endpoint address of the MIDI streaming data IN endpoint, for device-to-host data transfers. */
 		#define MIDI_STREAM_IN_EPADDR       (ENDPOINT_DIR_IN  | 1)

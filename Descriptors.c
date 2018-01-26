@@ -36,14 +36,68 @@
  */
 
 #include "Descriptors.h"
-
-extern bool MIDIBootMode;
-
 // Only one MIDI device below
 //#include "Descriptor_MIDI_KloK.c"
 #include "Descriptor_MIDI.c"
 
 #include "Descriptor_CDC_ArduinoUno.c"
+
+// LUFA MIDI Class driver interface configuration and state information.
+// NB : C style initializers here.  Forbidden in C++
+// Structs are declared as extern in the main cpp module.
+
+USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface =
+		{
+			.Config =
+				{
+					.StreamingInterfaceNumber = INTERFACE_ID_AudioStream,
+					.DataINEndpoint           =
+						{
+							.Address          = MIDI_STREAM_IN_EPADDR,
+							.Size             = MIDI_STREAM_EPSIZE,
+							.Banks            = 1,
+						},
+					.DataOUTEndpoint           =
+						{
+							.Address          = MIDI_STREAM_OUT_EPADDR,
+							.Size             = MIDI_STREAM_EPSIZE,
+							.Banks            = 1,
+						},
+				},
+		};
+
+// LUFA CDC Class driver interface configuration and state information. This structure is
+// passed to all CDC Class driver functions, so that multiple instances of the same class
+// within a device can be differentiated from one another.
+ // NB : C style initializers here.  Forbidden in C++
+ // Structs are declared as extern in the main cpp module.
+
+USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
+		{
+			.Config =
+				{
+					.ControlInterfaceNumber         = INTERFACE_ID_CDC_CCI,
+					.DataINEndpoint                 =
+						{
+							.Address                = CDC_TX_EPADDR,
+							.Size                   = CDC_TXRX_EPSIZE,
+							.Banks                  = 1,
+						},
+					.DataOUTEndpoint                =
+						{
+							.Address                = CDC_RX_EPADDR,
+							.Size                   = CDC_TXRX_EPSIZE,
+							.Banks                  = 1,
+						},
+					.NotificationEndpoint           =
+						{
+							.Address                = CDC_NOTIFICATION_EPADDR,
+							.Size                   = CDC_NOTIFICATION_EPSIZE,
+							.Banks                  = 1,
+						},
+				},
+		};
+
 
 /** Language descriptor structure. This descriptor, located in FLASH memory, is returned when the host requests
  *  the string descriptor with index 0 (the first index). It is actually an array of 16-bit integers, which indicate
@@ -57,6 +111,8 @@ const USB_Descriptor_String_t PROGMEM LanguageString = USB_STRING_DESCRIPTOR_ARR
  *  is called so that the descriptor details can be passed back and the appropriate descriptor sent back to the
  *  USB host.
  */
+extern bool MIDIBootMode;
+
 uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
                                     const uint16_t wIndex,
                                     const void** const DescriptorAddress)
