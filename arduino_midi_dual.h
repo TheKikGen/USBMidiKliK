@@ -43,52 +43,16 @@
 	void EVENT_USB_Device_Connect(void);
 	void EVENT_USB_Device_Disconnect(void);
 	void EVENT_USB_Device_ConfigurationChanged(void);
-	void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo);
-	void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo);
+	void EVENT_USB_Device_ControlRequest(void);
+	void EVENT_CDC_Device_ControLineStateChanged(const USB_ClassInfo_CDC_Device_t* );
+	void EVENT_CDC_Device_LineEncodingChanged(const USB_ClassInfo_CDC_Device_t* );
 
-	static  void processMIDI(void);
-	static  void processMIDItoUSB(void);
-	static  void processUSBtoMIDI(void);
-	static  void processUSBtoSerial(void);
-	static  void midiParse(uint8_t);
-	static void processMIDItoUSB_Bulk(void);
+	static void ProcessSerialUsbMode(void);
+	static void ProcessMidiUsbMode(void);
+	static bool ProcessMidiToUsb(uint8_t);
+	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *,uint8_t);
+	static void ProcessUsbToMidi(void);
+	static void SerialMIDI_SendEventPacket(const MIDI_EventPacket_t *);
 
-	// MIDI Messages Type
-	typedef enum
-	{
-	    InvalidType           = 0x00,    ///< For notifying errors
-	    NoteOff               = 0x80,    ///< Note Off
-	    NoteOn                = 0x90,    ///< Note On
-	    AfterTouchPoly        = 0xA0,    ///< Polyphonic AfterTouch
-	    ControlChange         = 0xB0,    ///< Control Change / Channel Mode
-	    ProgramChange         = 0xC0,    ///< Program Change
-	    AfterTouchChannel     = 0xD0,    ///< Channel (monophonic) AfterTouch
-	    PitchBend             = 0xE0,    ///< Pitch Bend
-	    SystemExclusive       = 0xF0,    ///< System Exclusive
-	    TimeCodeQuarterFrame  = 0xF1,    ///< System Common - MIDI Time Code Quarter Frame
-	    SongPosition          = 0xF2,    ///< System Common - Song Position Pointer
-	    SongSelect            = 0xF3,    ///< System Common - Song Select
-	    TuneRequest           = 0xF6,    ///< System Common - Tune Request
-	    Clock                 = 0xF8,    ///< System Real Time - Timing Clock
-	    Start                 = 0xFA,    ///< System Real Time - Start
-	    Continue              = 0xFB,    ///< System Real Time - Continue
-	    Stop                  = 0xFC,    ///< System Real Time - Stop
-	    ActiveSensing         = 0xFE,    ///< System Real Time - Active Sensing
-	    SystemReset           = 0xFF,    ///< System Real Time - System Reset
-	} MidiMessageType;
-
-		uint8_t		mRunningStatus_RX;
-		uint8_t		mRunningStatus_TX;
-		uint8_t		mPendingMessage[3];
-		uint8_t		mPendingMessageExpectedLength;
-		uint8_t		mPendingMessageIndex;
-		bool	  	mPendingMessageValid;
-
-		MIDI_EventPacket_t mCompleteMessage;
-
-		uint8_t getStatus(MidiMessageType inType, uint8_t inChannel);
-		uint8_t getTypeFromStatusByte(uint8_t inStatus);
-		uint8_t getChannelFromStatusByte(uint8_t inStatus);
-		bool isChannelMessage(uint8_t inType);
 
 #endif

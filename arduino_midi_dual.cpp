@@ -44,9 +44,9 @@ int  main(void)
 	SetupHardware();
 	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 
-	if (MIDIBootMode) processMIDI(); // Inifinite loop
+	if (MIDIBootMode) ProcessMidiUsbMode(); // Inifinite loop
 
-	else processUSBtoSerial();
+	else ProcessSerialUsbMode();
 
 ///////////////////////////////////////////////////////////////////////////////
 }
@@ -209,15 +209,18 @@ void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCI
 
 ///////////////////////////////////////////////////////////////////////////////
 // Serial Worker Functions
+// Used when Arduino is in USB Serial mode.
 ///////////////////////////////////////////////////////////////////////////////
 
-static void processUSBtoSerial(void) {
+// ----------------------------------------------------------------------------
+// INFINITE LOOP FOR USB SERIAL PROCESSING
+// ----------------------------------------------------------------------------
+static void ProcessSerialUsbMode(void) {
 
 	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
 	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
 	GlobalInterruptEnable();
 
-           ///////////////////////  INFINITE LOOP /////////////////////////
 	for (;;)
 		{
 		 // Only try to read bytes from the CDC interface if the transmit buffer is not full
@@ -263,16 +266,21 @@ static void processUSBtoSerial(void) {
 
 ///////////////////////////////////////////////////////////////////////////////
 // MIDI Worker Functions
+// Used when Arduino is in USB MIDI mode (default mode).
 ///////////////////////////////////////////////////////////////////////////////
 
-static void processMIDI(void) {
+// ----------------------------------------------------------------------------
+// INFINITE LOOP FOR USB MIDI AND SERIAL MIDI PROCESSING
+// ----------------------------------------------------------------------------
+static void ProcessMidiUsbMode(void) {
 
+	// This ringbuffer is populated by the ISR below
 	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
-  UCSR1B |= (1 << RXCIE1 ); // Enable the USART Receive Complete interrupt ( USART_RXC )
-	sei () ; // Enable the Global Interrupt Enable flag so that interrupts can be processe
-	//GlobalInterruptEnable();
 
-  ///////////////////////  INFINITE LOOP /////////////////////////
+	UCSR1B |= (1 << RXCIE1 ); // Enable the USART Receive Complete interrupt ( USART_RXC )
+	//sei () ; // Enable the Global Interrupt Enable flag so that interrupts can be processe
+	GlobalInterruptEnable();
+
 	for (;;) {
 
 		if (tx_ticks > 0) tx_ticks--;
@@ -283,11 +291,15 @@ static void processMIDI(void) {
 
 		// Device must be connected and configured for the task to run
 		if (USB_DeviceState == DEVICE_STATE_Configured) {
-		 	if (!(RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) )
-		 								midiParse(RingBuffer_Remove(&USARTtoUSB_Buffer));
 
-			processMIDItoUSB();
-			processUSBtoMIDI();
+			if (!(RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) ) {
+				if (ProcessMidiToUsb(RingBuffer_Remove(&USARTtoUSB_Buffer))) {
+					LEDs_TurnOnLEDs(LEDS_LED1);
+					rx_ticks = TICK_COUNT;
+				}
+			}
+
+			ProcessUsbToMidi();
 
 		}
 
@@ -296,64 +308,178 @@ static void processMIDI(void) {
 	}
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// ARDUINO SERIAL  TO HOST  MIDI IN
-///////////////////////////////////////////////////////////////////////////////
-static void processMIDItoUSB(void) {
+// ----------------------------------------------------------------------------
+// MIDI USB  - Table 4-1: Code IndexNumber Classifications of MIDI10.PDF
+// ----------------------------------------------------------------------------
+/*
+ The first byte in each 32-bit USB-MIDI Event Packet is a Packet Header
+ contains a Cable Number (4 bits) followed by a Code Index Number (4 bits).
+ The remaining threebytes contain the actual MIDI event.
+ Most typical parsed MIDI events are two or threebytes in length.
 
-	// Select the MIDI IN stream
-	Endpoint_SelectEndpoint(MIDI_STREAM_IN_EPADDR);
+ The Cable Number (C N) is a value ranging from 0x0 to 0xF indicating the number
+ assignment of the Embedded MIDI Jack associated with the endpoint that is
+ transferring the data.
+ The Code Index Number (CIN) indicates the classification of the bytes in
+ the MIDI_x fields. The following table summarizes these classifications.
 
-	if ( Endpoint_IsINReady() ) 	{
-		if (mPendingMessageValid == true) {
-			mPendingMessageValid = false;
+(Table 4-1: Code IndexNumber Classifications of MIDI10.PDF)                */
+static const int BytesIn_USB_MIDI_Command[] =
+{
+	 0,	/* 0 - function codes (reserved) */
+	 0,	/* 1 - cable events (reserved) */
+	 2,	/* 2 - two-byte system common message */
+	 3,	/* 3 - three-byte system common message */
+	 3,	/* 4 - sysex starts or continues */
+	 1,	/* 5 - sysex ends with one byte, or single-byte system common message */
+	 2,	/* 6 - sysex ends with two bytes */
+	 3,	/* 7 - sysex ends with three bytes */
+	 3,	/* 8 - note-off */
+	 3,	/* 9 - note-on */
+	 3,	/* A - poly-keypress */
+	 3,	/* B - control change */
+	 2,	/* C - program change */
+	 2,	/* D - channel pressure */
+	 3,	/* E - pitch bend change */
+	 1,	/* F - single byte */
+ };
 
-			// Write the MIDI event packet to the endpoint
-			Endpoint_Write_Stream_LE(&mCompleteMessage, sizeof(mCompleteMessage), NULL);
+// ----------------------------------------------------------------------------
+// MIDI PARSER
+// Check whether we've received any MIDI data from the USART, and if it's
+// complete send it over USB. return true if a packet was sent
+// ----------------------------------------------------------------------------
+static bool ProcessMidiToUsb(uint8_t receivedByte)
+{
+	static  MIDI_EventPacket_t MIDIEvent;
+	static  bool sysExMode = false;
+  static  uint8_t midiEventBufferIndex = 0;
+	static	uint8_t nextMidiMsgLength=0;
 
-			// Clear out complete message
-			memset(&mCompleteMessage, 0, sizeof(mCompleteMessage));
+	// Real-time message -- send immediately
+	if ( receivedByte >= 0xF8) {
+			 MIDIEvent.Event 		= 0xF;
+		   MIDIEvent.Data1    = receivedByte;
+			 MIDI_SendEventPacket(&MIDIEvent,1);
+			 midiEventBufferIndex = 0;
+			 return true;
+	}
+  // SYSTEM EXCLUSIVE
 
-			// Send the data in the endpoint to the host
-			Endpoint_ClearIN();
+	else if (receivedByte == 0xF0) sysExMode = true;  // Start SYSEX
+	else if (receivedByte == 0xF7) sysExMode = false; // SYSEX END
 
-			LEDs_TurnOnLEDs(LEDS_LED2);
-			tx_ticks = TICK_COUNT;
+	else if (receivedByte >= 0x80)  {
+		/* A new command */
+		midiEventBufferIndex = 0;
+		nextMidiMsgLength = BytesIn_USB_MIDI_Command[receivedByte >> 4];
+	}
+	else if (midiEventBufferIndex == 0 && !sysExMode)
+	{
+		/* Expecting a command but this isn't one -- ignore it */
+		return false;
+	}
+
+	memset( (void*) (&MIDIEvent + midiEventBufferIndex),receivedByte, 1);
+	midiEventBufferIndex++;
+
+	// Process SYSEX
+	if (sysExMode) {
+		if (midiEventBufferIndex == 3)
+		{
+			MIDIEvent.Event 		= 0x4;
+			MIDI_SendEventPacket(&MIDIEvent,midiEventBufferIndex);
+			midiEventBufferIndex = 0;
+			return true;
 		}
 	}
+	else if (receivedByte == 0xF7)
+	{
+		/* End of SysEx -- send the last bytes */
+		MIDIEvent.Event 		= 0x4 + midiEventBufferIndex;
+		MIDI_SendEventPacket(&MIDIEvent,midiEventBufferIndex);
+		midiEventBufferIndex = 0;
+		return true;
+	}
+	else if (midiEventBufferIndex == nextMidiMsgLength)
+	{
+		MIDIEvent.Event 		= MIDIEvent.Event >> 4;
+		MIDI_SendEventPacket(&MIDIEvent,midiEventBufferIndex);
+		midiEventBufferIndex = 1;
+		return true;
+	}
+	return false;
+}
+// ----------------------------------------------------------------------------
+// Send a MIDI Event packet to the USB
+// ----------------------------------------------------------------------------
+
+static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dataSize)
+{
+	// Zero padding
+	if (dataSize < 3 ) {
+				memset(  (void*) (MIDIEvent + dataSize  + 1),0, sizeof(MIDI_EventPacket_t)- dataSize - 1);
+	}
+	MIDI_Device_SendEventPacket(&Keyboard_MIDI_Interface, MIDIEvent);
+	MIDI_Device_Flush(&Keyboard_MIDI_Interface);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// HOST MIDI OUT TO ARDUINO SERIAL
-///////////////////////////////////////////////////////////////////////////////
+// ----------------------------------------------------------------------------
+// Read a MIDI USB event and send it to the USART.
+// ----------------------------------------------------------------------------
 
-static void processUSBtoMIDI(void)
+static void ProcessUsbToMidi(void)
 {
-
-	Endpoint_SelectEndpoint(MIDI_STREAM_OUT_EPADDR);
-
-	/* Check if a MIDI command has been received */
-	if (Endpoint_IsOUTReceived())
+	MIDI_EventPacket_t ReceivedMIDIEvent;
+	while (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
 	{
-		MIDI_EventPacket_t MIDIEvent;
-		/* Read the MIDI event packet from the endpoint */
-		Endpoint_Read_Stream_LE(&MIDIEvent, sizeof(MIDIEvent), NULL);
+			// Passthrough to Arduino
+			SerialMIDI_SendEventPacket(&ReceivedMIDIEvent);
+	}
 
-		// Passthrough to Arduino
-		Serial_SendByte(MIDIEvent.Data1);
-		Serial_SendByte(MIDIEvent.Data2);
-		Serial_SendByte(MIDIEvent.Data3);
+	LEDs_TurnOnLEDs(LEDS_LED1);
+	tx_ticks = TICK_COUNT;
 
-		LEDs_TurnOnLEDs(LEDS_LED1);
-		rx_ticks = TICK_COUNT;
+	/* If the endpoint is now empty, clear the bank */
+	if ( !(Endpoint_BytesInEndpoint()) ) Endpoint_ClearOUT();
 
-		/* If the endpoint is now empty, clear the bank */
-		if (!(Endpoint_BytesInEndpoint()))
+}
+
+// ----------------------------------------------------------------------------
+// Send a MIDI USB event to the USART.
+// ----------------------------------------------------------------------------
+
+static void SerialMIDI_SendEventPacket(const MIDI_EventPacket_t *Event)
+{
+	static int16_t lastStatusSent=-1;
+	uint8_t   BytesIn;
+	bool 			NoRunningStatus ;
+	uint8_t		command = Event->Event & 0x0F;
+
+	BytesIn = BytesIn_USB_MIDI_Command[command];
+
+	/* Don't do the running status optimisation on internal messages, SysEx
+	 * messages, or single bytes. */
+	switch (command) {
+			case 0x0: case 0x1: case 0x4: case 0x5: case 0x6:
+			case 0x7: case 0xF:
+				NoRunningStatus = true;
+				break;
+	default:
+			  NoRunningStatus = false;
+				break;
+	}
+
+	if (BytesIn >= 1)
+	{
+		if (NoRunningStatus || Event->Data1 != lastStatusSent)
 		{
-			/* Clear the endpoint ready for new packet */
-			Endpoint_ClearOUT();
+			Serial_SendByte(Event->Data1);
+			lastStatusSent = Event->Data1;
 		}
 	}
+	if (BytesIn >= 2) Serial_SendByte(Event->Data2);
+	if (BytesIn >= 3) Serial_SendByte(Event->Data3);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -364,239 +490,4 @@ static void processUSBtoMIDI(void)
 ISR(USART1_RX_vect, ISR_BLOCK)
 {
 	RingBuffer_Insert(&USARTtoUSB_Buffer, UDR1);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// MIDI PARSER
-///////////////////////////////////////////////////////////////////////////////
-
-void midiParse(uint8_t extracted )
-{
-	// Borrowed + Modified from Francois Best's Arduino MIDI Library
-	// https://github.com/FortySevenEffects/arduino_midi_library
-  if (mPendingMessageIndex == 0)
-  {
-      // Start a new pending message
-      mPendingMessage[0] = extracted;
-
-      // Check for running status first
-      if (isChannelMessage(getTypeFromStatusByte(mRunningStatus_RX)))
-      {
-          // Only these types allow Running Status
-
-          // If the status byte is not received, prepend it to the pending message
-          if (extracted < 0x80)
-          {
-              mPendingMessage[0]   = mRunningStatus_RX;
-              mPendingMessage[1]   = extracted;
-              mPendingMessageIndex = 1;
-          }
-          // Else we received another status byte, so the running status does not apply here.
-          // It will be updated upon completion of this message.
-      }
-
-      switch (getTypeFromStatusByte(mPendingMessage[0]))
-      {
-          // 1 byte messages
-          case Start:
-          case Continue:
-          case Stop:
-          case Clock:
-          case ActiveSensing:
-          case SystemReset:
-          case TuneRequest:
-              // Handle the message type directly here.
-          	mCompleteMessage.Event 	 = MIDI_EVENT(0, getTypeFromStatusByte(mPendingMessage[0]));
-              mCompleteMessage.Data1   = mPendingMessage[0];
-              mCompleteMessage.Data2   = 0;
-              mCompleteMessage.Data3   = 0;
-              mPendingMessageValid  	 = true;
-
-              // We still need to reset these
-              mPendingMessageIndex = 0;
-              mPendingMessageExpectedLength = 0;
-
-              return;
-              break;
-
-          // 2 bytes messages
-          case ProgramChange:
-          case AfterTouchChannel:
-          case TimeCodeQuarterFrame:
-          case SongSelect:
-              mPendingMessageExpectedLength = 2;
-              break;
-
-          // 3 bytes messages
-          case NoteOn:
-          case NoteOff:
-          case ControlChange:
-          case PitchBend:
-          case AfterTouchPoly:
-          case SongPosition:
-              mPendingMessageExpectedLength = 3;
-              break;
-
-          case SystemExclusive:
-              break;
-
-          case InvalidType:
-          default:
-              // Something bad happened
-              break;
-      }
-
-      if (mPendingMessageIndex >= (mPendingMessageExpectedLength - 1))
-      {
-          // Reception complete
-          mCompleteMessage.Event = MIDI_EVENT(0, getTypeFromStatusByte(mPendingMessage[0]));
-          mCompleteMessage.Data1 = mPendingMessage[0]; // status = channel + type
-					mCompleteMessage.Data2 = mPendingMessage[1];
-
-          // Save Data3 only if applicable
-          if (mPendingMessageExpectedLength == 3)
-              mCompleteMessage.Data3 = mPendingMessage[2];
-          else
-              mCompleteMessage.Data3 = 0;
-
-          mPendingMessageIndex = 0;
-          mPendingMessageExpectedLength = 0;
-          mPendingMessageValid = true;
-          return;
-      }
-      else
-      {
-          // Waiting for more data
-          mPendingMessageIndex++;
-      }
-  }
-  else
-  {
-      // First, test if this is a status byte
-      if (extracted >= 0x80)
-      {
-          // Reception of status bytes in the middle of an uncompleted message
-          // are allowed only for interleaved Real Time message or EOX
-          switch (extracted)
-          {
-              case Clock:
-              case Start:
-              case Continue:
-              case Stop:
-              case ActiveSensing:
-              case SystemReset:
-
-                  // Here we will have to extract the one-byte message,
-                  // pass it to the structure for being read outside
-                  // the MIDI class, and recompose the message it was
-                  // interleaved into. Oh, and without killing the running status..
-                  // This is done by leaving the pending message as is,
-                  // it will be completed on next calls.
-         		 	mCompleteMessage.Event = MIDI_EVENT(0, getTypeFromStatusByte(extracted));
-          		mCompleteMessage.Data1 = extracted;
-                  mCompleteMessage.Data2 = 0;
-                  mCompleteMessage.Data3 = 0;
-                 	mPendingMessageValid   = true;
-                  return;
-                  break;
-              default:
-                  break;
-          }
-      }
-
-      // Add extracted data byte to pending message
-      mPendingMessage[mPendingMessageIndex] = extracted;
-
-      // Now we are going to check if we have reached the end of the message
-      if (mPendingMessageIndex >= (mPendingMessageExpectedLength - 1))
-      {
-
-      		mCompleteMessage.Event = MIDI_EVENT(0, getTypeFromStatusByte(mPendingMessage[0]));
-          mCompleteMessage.Data1 = mPendingMessage[0];
-          mCompleteMessage.Data2 = mPendingMessage[1];
-
-          // Save Data3 only if applicable
-          if (mPendingMessageExpectedLength == 3)
-              mCompleteMessage.Data3 = mPendingMessage[2];
-          else
-              mCompleteMessage.Data3 = 0;
-
-          // Reset local variables
-          mPendingMessageIndex = 0;
-          mPendingMessageExpectedLength = 0;
-          mPendingMessageValid = true;
-
-          // Activate running status (if enabled for the received type)
-          switch (getTypeFromStatusByte(mPendingMessage[0]))
-          {
-              case NoteOff:
-              case NoteOn:
-              case AfterTouchPoly:
-              case ControlChange:
-              case ProgramChange:
-              case AfterTouchChannel:
-              case PitchBend:
-                  // Running status enabled: store it from received message
-                  mRunningStatus_RX = mPendingMessage[0];
-                  break;
-
-              default:
-                  // No running status
-                  mRunningStatus_RX = InvalidType;
-                  break;
-          }
-          return;
-      }
-      else
-      {
-          // Not complete? Then update the index of the pending message.
-          mPendingMessageIndex++;
-      }
-  }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// MIDI Utility Functions
-///////////////////////////////////////////////////////////////////////////////
-
-uint8_t getStatus(MidiMessageType inType, uint8_t inChannel)
-{
-    return (   inType |  ( (inChannel - 1) & 0x0f) );
-}
-
-uint8_t getTypeFromStatusByte(uint8_t inStatus)
-{
-    if ((inStatus  < 0x80) ||
-        (inStatus == 0xf4) ||
-        (inStatus == 0xf5) ||
-        (inStatus == 0xf9) ||
-        (inStatus == 0xfD))
-    {
-        // Data bytes and undefined.
-        return InvalidType;
-    }
-
-    if (inStatus < 0xf0)
-    {
-        // Channel message, remove channel nibble.
-        return (inStatus & 0xf0);
-    }
-
-    return inStatus;
-}
-
-uint8_t getChannelFromStatusByte(uint8_t inStatus)
-{
-	return (inStatus & 0x0f) + 1;
-}
-
-bool isChannelMessage(uint8_t inType)
-{
-    return (inType == NoteOff           ||
-            inType == NoteOn            ||
-            inType == ControlChange     ||
-            inType == AfterTouchPoly    ||
-            inType == AfterTouchChannel ||
-            inType == PitchBend         ||
-            inType == ProgramChange);
 }
