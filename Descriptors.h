@@ -57,7 +57,7 @@
 		#define MIDI_STREAM_OUT_EPADDR      (ENDPOINT_DIR_OUT | 2)
 
 		/** Endpoint size in bytes of the Audio isochronous streaming data IN and OUT endpoints. */
-		#define MIDI_STREAM_EPSIZE          64
+		#define MIDI_STREAM_EPSIZE          16
 
 		/** Endpoint address of the CDC device-to-host notification IN endpoint. */
 		#define CDC_NOTIFICATION_EPADDR       (ENDPOINT_DIR_IN  | 2)

@@ -22,15 +22,12 @@
 
 	#include "Descriptors.h"
 	#include "LUFA/Common/Common.h"
+	#include <LUFA/Drivers/Peripheral/Serial.h>
 	#include <LUFA/Drivers/USB/USB.h>
 	#include <LUFA/Platform/Platform.h>
-
-	#include <LUFA/Drivers/Peripheral/Serial.h>
 	#include <LUFA/Drivers/Board/LEDs.h>
 	#include <LUFA/Drivers/Board/Board.h>
-
 	#include <LUFA/Drivers/Misc/RingBuffer.h>
-
   #include <LUFA/Drivers/USB/Class/CDCClass.h>
 
 	#define LEDMASK_USB_NOTREADY      LEDS_LED1

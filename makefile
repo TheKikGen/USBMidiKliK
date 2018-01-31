@@ -24,6 +24,7 @@ SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
+SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
 #SRC          += $(ARDUINO_MIDILIB)/MIDI.cpp
 

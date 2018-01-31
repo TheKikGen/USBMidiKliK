@@ -9,9 +9,7 @@
  *               (http://www.dimitridiakopoulos.com)
  *     . Inspired also by dualMocoLUFA Project by morecat_la
  *               (http://morecatlab.akiba.coocan.jp/)
- *	   . Francois Best's Arduino MIDI Library, for sure the best one !
- *						(https://github.com/FortySevenEffects/arduino_midi_library)
- *
+  *
  *  Compiled against the last LUFA version / MIDI library
  ***********************************************************************/
 
@@ -130,8 +128,6 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 
 	if (MIDIBootMode) {
 		// Setup MIDI Data Endpoints
-		//ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_IN_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
-		//ConfigSuccess &= Endpoint_ConfigureEndpoint(MIDI_STREAM_OUT_EPADDR, EP_TYPE_BULK, MIDI_STREAM_EPSIZE, 1);
 		ConfigSuccess &= MIDI_Device_ConfigureEndpoints(&Keyboard_MIDI_Interface);
 	}
 	else {
@@ -274,11 +270,7 @@ static void ProcessSerialUsbMode(void) {
 // ----------------------------------------------------------------------------
 static void ProcessMidiUsbMode(void) {
 
-	// This ringbuffer is populated by the ISR below
-	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
-
 	UCSR1B |= (1 << RXCIE1 ); // Enable the USART Receive Complete interrupt ( USART_RXC )
-	//sei () ; // Enable the Global Interrupt Enable flag so that interrupts can be processe
 	GlobalInterruptEnable();
 
 	for (;;) {
@@ -289,18 +281,10 @@ static void ProcessMidiUsbMode(void) {
 		if (rx_ticks > 0) rx_ticks--;
 		else if (rx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED1);
 
-		// Device must be connected and configured for the task to run
-		if (USB_DeviceState == DEVICE_STATE_Configured) {
+		ProcessUsbToMidi();
+		// NB : ProcessMidiToUsb is done in the ISR directly because of
+		// real time aspects
 
-			if (!(RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) ) {
-				ProcessMidiToUsb(RingBuffer_Remove(&USARTtoUSB_Buffer));
-			}
-
-			ProcessUsbToMidi();
-
-		}
-
-    MIDI_Device_USBTask(&Keyboard_MIDI_Interface);
 		USB_USBTask();
 	}
 }
@@ -360,51 +344,20 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
   static  uint8_t nextMidiMsgLength=0;		// Len of the current midi message processed
   static  uint8_t lastVoiceStatus=0;			// Used for running status
 
+	if (USB_DeviceState != DEVICE_STATE_Configured) return false;
+
 	////////////////////// SYSTEM COMMON MESSAGES ///////////////////////////////
+
 	////////////////////////////////////////////////
-	// SYSTEM EXCLUSIVE
-	// 11110000= F0= 240  System Exclusive  **  **
-
-  if (receivedByte == 0xF0 ) {
-      sysExMode = true;  // Start SYSEX
-      dataBufferIndex = 0;
-      lastVoiceStatus = 0;
-  } else
-
-  ////////////////////////////////////////////////
-  // END OF SYSEX
-  // 11110111= F7= 247 End of SysEx (EOX)  none  none
-  if (receivedByte == 0xF7 ) {
-			lastVoiceStatus = 0;
-      sysExMode = false; // SYSEX END
-  } else
-
-  ////////////////////////////////////////////////
-  // RESERVED
-  // 11110100= F4= 244 Undefined (Reserved)  --- ---
-  // 11110101= F5= 245 Undefined (Reserved)  --- ---
-  // 11111001= F9= 249 Undefined (Reserved)  --- ---
-  // 11111101= FD= 253 Undefined (Reserved)  --- ---
-
-  if (receivedByte == 0xF4 || receivedByte == 0xF5 ||
-      receivedByte == 0xF9 || receivedByte == 0xFD)
-      return false;
-  else
-
-  ////////////////////////////////////////////////
   // REAL TIME MESSAGES
-  // 11111000= F8= 248 Timing clock  none  none
+	// 11111000= F8= 248 Timing clock  none  none
   // 11111010= FA= 250 Start none  none
   // 11111011= FB= 251 Continue  none  none
   // 11111100= FC= 252 Stop  none  none
   // 11111110= FE= 254 Active Sensing  none  none
   // 11111111= FF= 255 System Reset  none  none
 
-  // 11110110= F6= 246 Tune request  none  none
-  // Tune request because it is a 1 byte too
-  // even if it is a common message.
-
-  if ( receivedByte >= 0xF8 || receivedByte == 0xF6 ) {
+	if ( receivedByte >= 0xF8 ) {
        MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
        MIDIEvent.Data1    = receivedByte;
 			 // Send immediatly
@@ -412,12 +365,7 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
        return true;
   } else
 
-  ////////////////////////////////////////////////
-  // OTHERS COMMON MESSAGES
-  // 11110010= F2= 242 Song Position Pointer LSB MSB
-  // 11110011= F3= 243 Song Select (Song #)  (0-127) none
-  // 11110001= F1= 241 MIDI Time Code Qtr. Frame -see spec-  -see spec-
-
+	// 11110001= F1= 241 MIDI Time Code Qtr. Frame -see spec-  -see spec-
 	// Midi Quarter Frame MTC
   if (receivedByte == 0xF1 ) {
 			lastVoiceStatus = 0; // Cancel any running status
@@ -432,6 +380,36 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
 			MTCFrame = false;
 			return true;
 	} else
+
+	////////////////////////////////////////////////
+	// SYSTEM EXCLUSIVE
+	// 11110000= F0= 240  System Exclusive  **  **
+
+  if (receivedByte == 0xF0 ) {
+      sysExMode = true;  // Start SYSEX
+      dataBufferIndex = 0;
+      lastVoiceStatus = 0;
+  } else
+
+  // END OF SYSEX
+  // 11110111= F7= 247 End of SysEx (EOX)  none  none
+  if (receivedByte == 0xF7 ) {
+			lastVoiceStatus = 0;
+      sysExMode = false; // SYSEX END
+  } else
+
+  ////////////////////////////////////////////////
+  // OTHERS COMMON MESSAGES
+  // 11110010= F2= 242 Song Position Pointer LSB MSB
+  // 11110011= F3= 243 Song Select (Song #)  (0-127) none
+	// 11110110= F6= 246 Tune request  none  none
+  if ( receivedByte == 0xF6 ) {
+       MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
+       MIDIEvent.Data1    = receivedByte;
+			 // Send immediatly
+       MIDI_SendEventPacket(&MIDIEvent,1);
+       return true;
+  } else
 
   // Song position
   if ( receivedByte == 0xF2){
@@ -454,8 +432,20 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
       lastVoiceStatus = 0;
  } else
 
+ ////////////////////////////////////////////////
+ // RESERVED
+ // 11110100= F4= 244 Undefined (Reserved)  --- ---
+ // 11110101= F5= 245 Undefined (Reserved)  --- ---
+ // 11111001= F9= 249 Undefined (Reserved)  --- ---
+ // 11111101= FD= 253 Undefined (Reserved)  --- ---
+
+ if (receivedByte == 0xF4 || receivedByte == 0xF5 ||
+		 receivedByte == 0xF9 || receivedByte == 0xFD)
+		 return false;
+ else
+
   ////////////////////// CHANNEL VOICES MESSAGES //////////////////////
-  if (receivedByte >= 0x80)  {
+ if (receivedByte >= 0x80)  {
 
 	  // Still some data to send here ?
     // Not normal. Probably a message dropped...
@@ -539,41 +529,26 @@ static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dat
 // ----------------------------------------------------------------------------
 // Read a MIDI USB event and send it to the USART.
 // ----------------------------------------------------------------------------
-// From USB/Host to Arduino/Serial
-
-static void ProcessUsbToMidi(void)
-{
-	MIDI_EventPacket_t MIDIEvent;
-	while (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent))
-	{
-			// Passthrough to Arduino
-			SerialMIDI_SendEventPacket(&MIDIEvent);
-	}
-
-	 // If the endpoint is now empty, clear the bank
-	if ( !(Endpoint_BytesInEndpoint()) ) Endpoint_ClearOUT();
-
-}
-
-// ----------------------------------------------------------------------------
-// Send a MIDI USB event to the USART.
-// ----------------------------------------------------------------------------
 // USB MIDI will do all the parsing stuff for us.
 // We just need to get the length of the MIDI message embedded in the packet
 // ex : Note-on message on virtual cable 1 (CN=0x1; CIN=0x9) 	19 9n kk vv => 9n kk vv
-static void SerialMIDI_SendEventPacket(const MIDI_EventPacket_t *Event)
+static void ProcessUsbToMidi(void)
 {
-	uint8_t CIN = Event->Event & 0x0F;
-	uint8_t CN  = Event->Event >> 4;
-	uint8_t BytesIn = BytesIn_USB_MIDI_Command[CIN];
+	MIDI_EventPacket_t MIDIEvent;
 
-	if ( Serial_IsSendReady() ) {
-		if (BytesIn >= 1) Serial_SendByte(Event->Data1);
-		if (BytesIn >= 2) Serial_SendByte(Event->Data2);
-		if (BytesIn == 3) Serial_SendByte(Event->Data3);
+	while (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent))
+	{
+			// Passthrough to Arduino
+			uint8_t CIN = MIDIEvent.Event & 0x0F;
+			if (CIN >= 2 ) {
+					uint8_t BytesIn = BytesIn_USB_MIDI_Command[CIN];
+					if ( Serial_IsSendReady() ) {
+						Serial_SendData	(	(void *)&MIDIEvent.Data1, BytesIn);
 
-		LEDs_TurnOnLEDs(LEDS_LED2);
-		tx_ticks = TICK_COUNT;
+						LEDs_TurnOnLEDs(LEDS_LED2);
+						tx_ticks = TICK_COUNT;
+					}
+			}
 	}
 
 }
@@ -585,5 +560,5 @@ static void SerialMIDI_SendEventPacket(const MIDI_EventPacket_t *Event)
 // Parse via Arduino/Serial
 ISR(USART1_RX_vect, ISR_BLOCK)
 {
-	RingBuffer_Insert(&USARTtoUSB_Buffer, UDR1);
+	ProcessMidiToUsb(UDR1);
 }
