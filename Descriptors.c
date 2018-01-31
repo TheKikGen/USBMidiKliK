@@ -126,19 +126,19 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 	switch (DescriptorType)
 	{
 		case DTYPE_Device:
-			if (MIDIBootMode) 			Address = &DeviceDescriptorMIDI;
-			else 			Address = &DeviceDescriptorCDC;
+			if (MIDIBootMode) 			Address = (void*)&DeviceDescriptorMIDI;
+			else 			Address = (void*)&DeviceDescriptorCDC;
 
 			Size    = sizeof(USB_Descriptor_Device_t);
 			break;
 
 		case DTYPE_Configuration:
 			if (MIDIBootMode) {
-				Address = &ConfigurationDescriptorMIDI;
-				Size    = sizeof(USB_Descriptor_Configuration_t);
+				Address = (void*)&ConfigurationDescriptorMIDI;
+				Size    = sizeof(USB_Descriptor_ConfigurationMIDI_t);
 			}
 			else {
-				Address = &ConfigurationDescriptorCDC;
+				Address = (void*)&ConfigurationDescriptorCDC;
 				Size    = sizeof(USB_Descriptor_ConfigurationCDC_t);
 			}
 			break;
@@ -147,34 +147,34 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 			switch (DescriptorNumber)
 			{
 				case STRING_ID_Language:
-					Address = &LanguageString;
+					Address = (void*)&LanguageString;
 					Size    = pgm_read_byte(&LanguageString.Header.Size);
 					break;
 
 				case STRING_ID_Manufacturer:
 					if (MIDIBootMode) {
-						Address = &ManufacturerStringMIDI;
+						Address = (void*)&ManufacturerStringMIDI;
 						Size    = pgm_read_byte(&ManufacturerStringMIDI.Header.Size);
 					}
 					else {
-						Address = &ManufacturerStringCDC;
+						Address = (void*)&ManufacturerStringCDC;
 						Size    = pgm_read_byte(&ManufacturerStringCDC.Header.Size);
 					}
 					break;
 
 				case STRING_ID_Product:
 					if (MIDIBootMode) {
-						Address = &ProductStringMIDI;
+						Address = (void*)&ProductStringMIDI;
 						Size    = pgm_read_byte(&ProductStringMIDI.Header.Size);
 					} else {
-						Address = &ProductStringCDC;
+						Address = (void*)&ProductStringCDC;
 						Size    = pgm_read_byte(&ProductStringCDC.Header.Size);
 					}
 					break;
 
 				case STRING_ID_Serial:
 						if (!MIDIBootMode) {
-							Address = &ProductSerialCDC;
+							Address = (void*)&ProductSerialCDC;
 							Size    = pgm_read_byte(&ProductSerialCDC.Header.Size);
 						}
 						break;

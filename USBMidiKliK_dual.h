@@ -35,6 +35,13 @@
 	#define LEDMASK_USB_READY         LEDS_LED2
 	#define LEDMASK_USB_ERROR         LEDS_LED1
 
+  /* MIDI USB PACKET TAG */
+	// Choose an unsed common MIDI message status.
+	// This is absolutely not standard, and is for internal
+	// usage only.
+
+	#define USBMIDI_PKTAG 0xFD
+
 	/* Function Prototypes: */
 	void SetupHardware(void);
 	void EVENT_USB_Device_Connect(void);
@@ -49,7 +56,5 @@
 	static bool ProcessMidiToUsb(uint8_t);
 	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *,uint8_t);
 	static void ProcessUsbToMidi(void);
-	static void SerialMIDI_SendEventPacket(const MIDI_EventPacket_t *);
-
 
 #endif

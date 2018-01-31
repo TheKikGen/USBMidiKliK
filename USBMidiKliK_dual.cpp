@@ -21,6 +21,10 @@ const uint16_t TICK_COUNT = 3000;
 
 bool MIDIBootMode  = false;
 bool MIDIHighSpeed = false;	// 0: normal speed(31250bps), 1: high speed (1250000bps)
+uint8_t UsbMIDITagPacket = 0x00 ;  	// Used to tag MIDI events when sending to serial if
+																		// required. So it is possible to distinguish
+																		// serial MIDI message from USB ones.
+uint8_t UsbMIDITagPacketLong = 0x00;// Long or short packet
 
 // Ring Buffers
 
@@ -101,10 +105,7 @@ void SetupHardware(void)
 	/* Pull target /RESET line high */
 	AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
 	AVR_RESET_LINE_DDR  |= AVR_RESET_LINE_MASK;
-
-
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // USB Configuration and  events
@@ -213,51 +214,51 @@ void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCI
 // ----------------------------------------------------------------------------
 static void ProcessSerialUsbMode(void) {
 
-	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
-	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
-	GlobalInterruptEnable();
+		RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
+		RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
+		GlobalInterruptEnable();
 
-	for (;;)
-		{
-		 // Only try to read bytes from the CDC interface if the transmit buffer is not full
+		for (;;)
+			{
+			 // Only try to read bytes from the CDC interface if the transmit buffer is not full
 
-		 if (!(RingBuffer_IsFull(&USBtoUSART_Buffer))) {
+			 if (!(RingBuffer_IsFull(&USBtoUSART_Buffer))) {
 
-			 int16_t ReceivedByte = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-			 // Store received byte into the USART transmit buffer
-			 if (!(ReceivedByte < 0))
-				 RingBuffer_Insert(&USBtoUSART_Buffer, ReceivedByte);
-		 }
+				 int16_t ReceivedByte = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+				 // Store received byte into the USART transmit buffer
+				 if (!(ReceivedByte < 0))
+					 RingBuffer_Insert(&USBtoUSART_Buffer, ReceivedByte);
+			 }
 
-		 uint16_t BufferCount = RingBuffer_GetCount(&USARTtoUSB_Buffer);
-		 if (BufferCount) {
-			 Endpoint_SelectEndpoint(VirtualSerial_CDC_Interface.Config.DataINEndpoint.Address);
+			 uint16_t BufferCount = RingBuffer_GetCount(&USARTtoUSB_Buffer);
+			 if (BufferCount) {
+				 Endpoint_SelectEndpoint(VirtualSerial_CDC_Interface.Config.DataINEndpoint.Address);
 
-			 // Check if a packet is already enqueued to the host - if so, we shouldn't try to send more data
-			// until it completes as there is a chance nothing is listening and a lengthy timeout could occur
-			 if (Endpoint_IsINReady()) {
-				 // Never send more than one bank size less one byte to the host at a time, so that we don't block
-			// while a Zero Length Packet (ZLP) to terminate the transfer is sent if the host isn't listening
-				 uint8_t BytesToSend = MIN(BufferCount, (CDC_TXRX_EPSIZE - 1));
+				 // Check if a packet is already enqueued to the host - if so, we shouldn't try to send more data
+				// until it completes as there is a chance nothing is listening and a lengthy timeout could occur
+				 if (Endpoint_IsINReady()) {
+					 // Never send more than one bank size less one byte to the host at a time, so that we don't block
+				// while a Zero Length Packet (ZLP) to terminate the transfer is sent if the host isn't listening
+					 uint8_t BytesToSend = MIN(BufferCount, (CDC_TXRX_EPSIZE - 1));
 
-				 // Read bytes from the USART receive buffer into the USB IN endpoint
-				 while (BytesToSend--) {
-					 // Try to send the next byte of data to the host, abort if there is an error without dequeuing
-					 if (CDC_Device_SendByte(&VirtualSerial_CDC_Interface,
-											 RingBuffer_Peek(&USARTtoUSB_Buffer)) != ENDPOINT_READYWAIT_NoError) break;
-					 // Dequeue the already sent byte from the buffer now we have confirmed that no transmission error occurred
-					 RingBuffer_Remove(&USARTtoUSB_Buffer);
+					 // Read bytes from the USART receive buffer into the USB IN endpoint
+					 while (BytesToSend--) {
+						 // Try to send the next byte of data to the host, abort if there is an error without dequeuing
+						 if (CDC_Device_SendByte(&VirtualSerial_CDC_Interface,
+												 RingBuffer_Peek(&USARTtoUSB_Buffer)) != ENDPOINT_READYWAIT_NoError) break;
+						 // Dequeue the already sent byte from the buffer now we have confirmed that no transmission error occurred
+						 RingBuffer_Remove(&USARTtoUSB_Buffer);
+					 }
 				 }
 			 }
+
+			 // Load the next byte from the USART transmit buffer into the USART if transmit buffer space is available
+			 if (Serial_IsSendReady() && !(RingBuffer_IsEmpty(&USBtoUSART_Buffer))  )
+				 Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
+
+			 CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+			 USB_USBTask();
 		 }
-
-		 // Load the next byte from the USART transmit buffer into the USART if transmit buffer space is available
-		 if (Serial_IsSendReady() && !(RingBuffer_IsEmpty(&USBtoUSART_Buffer))  )
-			 Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
-
-		 CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
-		 USB_USBTask();
-	 }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -433,6 +434,39 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
  } else
 
  ////////////////////////////////////////////////
+ // USB MIDI packet tagging activation
+ // NOT STANDARD !!!  SPECIFIC TO USBMIDIKLIK
+ ////////////////////////////////////////////////
+ // The message status is defined in MidiKlik.H
+ // Use only an undefined one and this if bloc must
+ // stay here, before the reserved/undefines if bloc.
+ // This should be totally transparent to any device.
+ // Later : better to implement that with SYSEX...
+ if ( receivedByte == USBMIDI_PKTAG ) {
+		 //  MIDI Message is 2 bytes, structured as follow :
+		 //  ss [pp-aa]
+		 //  ss : Status byte = USBMIDI_PKTAG
+		 //  [pp : 4 bits. 0 = Tagging stop. !=0 tagging starts
+		 //  aa] : 4 bits : short packet / 1: long packet
+		 // Long packets include the CN/CIN. This can be usefull
+		 // for debugging or routing reasons.
+		 //  0XFD 0X10  :  Activate tagging with short packet
+		 //  0XFD 0X00  :  Inactive tagging
+		 //  0XFD 0X11  :  Activate tagging with long packet
+		 //
+		 // Packet Tagging looks like :
+		 // [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
+
+		 // Fill the USB packet header.
+		 MIDIEvent.Event     = 0x02; /* 2 - two-byte system common message */
+		 nextMidiMsgLength 	 = 2;
+		 dataBufferIndex 		 = 0;
+		 lastVoiceStatus 		 = 0;
+ }
+
+ else
+
+ ////////////////////////////////////////////////
  // RESERVED
  // 11110100= F4= 244 Undefined (Reserved)  --- ---
  // 11110101= F5= 245 Undefined (Reserved)  --- ---
@@ -515,6 +549,17 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
 
 static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dataSize)
 {
+
+	// Intercept the tagging packet command
+	if ( MIDIEvent->Data1 == USBMIDI_PKTAG ) {
+			// Toggle mod
+			// Ex :  0XFD 0X11  :  Activate tagging with long packet
+			// NB : This command is unidirectionnal, from serial only.
+			UsbMIDITagPacket = (bool)MIDIEvent->Data1 & 0X10;
+			UsbMIDITagPacketLong = (bool)MIDIEvent->Data1 & 0X01;
+			// This is not obviously for USB !
+			return;
+	}
 	// Zero padding
   if (dataSize < 3 ) {
          memset(  (void*) (&MIDIEvent->Data1 + dataSize),0, 3 - dataSize);
@@ -543,6 +588,12 @@ static void ProcessUsbToMidi(void)
 			if (CIN >= 2 ) {
 					uint8_t BytesIn = BytesIn_USB_MIDI_Command[CIN];
 					if ( Serial_IsSendReady() ) {
+
+						// if Tagging mode active, TAG ONLY TO SERIAL
+						if (UsbMIDITagPacket) {
+							Serial_SendByte(USBMIDI_PKTAG);
+							if (UsbMIDITagPacketLong) Serial_SendByte(MIDIEvent.Event);
+						}
 						Serial_SendData	(	(void *)&MIDIEvent.Data1, BytesIn);
 
 						LEDs_TurnOnLEDs(LEDS_LED2);
@@ -550,7 +601,6 @@ static void ProcessUsbToMidi(void)
 					}
 			}
 	}
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -560,5 +610,9 @@ static void ProcessUsbToMidi(void)
 // Parse via Arduino/Serial
 ISR(USART1_RX_vect, ISR_BLOCK)
 {
-	ProcessMidiToUsb(UDR1);
+	uint8_t ReceivedByte = UDR1;
+
+	if (MIDIBootMode )
+			ProcessMidiToUsb(ReceivedByte);
+	else RingBuffer_Insert(&USARTtoUSB_Buffer, ReceivedByte);
 }

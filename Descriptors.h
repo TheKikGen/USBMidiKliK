@@ -105,7 +105,7 @@
 			USB_MIDI_Descriptor_Jack_Endpoint_t       MIDI_In_Jack_Endpoint_SPC;
 			USB_Audio_Descriptor_StreamEndpoint_Std_t MIDI_Out_Jack_Endpoint;
 			USB_MIDI_Descriptor_Jack_Endpoint_t       MIDI_Out_Jack_Endpoint_SPC;
-		} USB_Descriptor_Configuration_t;
+		} USB_Descriptor_ConfigurationMIDI_t;
 
 		typedef struct
 		{

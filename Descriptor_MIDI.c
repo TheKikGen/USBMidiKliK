@@ -70,13 +70,13 @@ const USB_Descriptor_Device_t PROGMEM DeviceDescriptorMIDI =  // MIDI
  *  and endpoints. The descriptor is read out by the USB host during the enumeration process when selecting
  *  a configuration so that the host may correctly communicate with the USB device.
  */
-const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptorMIDI = // MIDI
+const USB_Descriptor_ConfigurationMIDI_t PROGMEM ConfigurationDescriptorMIDI = // MIDI
 {
 	.Config =
 		{
 			.Header                   = {.Size = sizeof(USB_Descriptor_Configuration_Header_t), .Type = DTYPE_Configuration},
 
-			.TotalConfigurationSize   = sizeof(USB_Descriptor_Configuration_t),
+			.TotalConfigurationSize   = sizeof(USB_Descriptor_ConfigurationMIDI_t),
 			.TotalInterfaces          = 2,
 
 			.ConfigurationNumber      = 1,
@@ -138,8 +138,8 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptorMIDI = // MI
 
 			.AudioSpecification       = VERSION_BCD(1,0,0),
 
-			.TotalLength              = (sizeof(USB_Descriptor_Configuration_t) -
-			                             offsetof(USB_Descriptor_Configuration_t, Audio_StreamInterface_SPC))
+			.TotalLength              = (sizeof(USB_Descriptor_ConfigurationMIDI_t) -
+			                             offsetof(USB_Descriptor_ConfigurationMIDI_t, Audio_StreamInterface_SPC))
 		},
 
 	.MIDI_In_Jack_Emb =

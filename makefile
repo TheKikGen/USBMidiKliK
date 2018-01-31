@@ -26,23 +26,63 @@ SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
 SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
-#SRC          += $(ARDUINO_MIDILIB)/MIDI.cpp
 
 LUFA_PATH    = ../../LUFA
-#ARDUINO_MIDILIB = ./MIDI/src
+
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS     =
 
+# ARDUINO libraries
+
+ARDUINO_PATH = /C/Arduino
+ARDUINO_CORE = $(ARDUINO_PATH)/hardware/arduino/avr
+ARDUINO_INC += "-I$(ARDUINO_CORE)/cores/arduino"
+#ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/SoftwareSerial/src"
+ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/EEPROM/src"
+ARDUINO_INC += "-I$(ARDUINO_PATH)/packages/HoodLoader2/hardware/avr/2.0.5/variants/HoodLoader2"
+
+CC_FLAGS     += $(ARDUINO_INC)
+# CC_FLAGS     += -llib/arduino/libraries/SoftwareSerial/SoftwareSerial.cpp.o
+# CC_FLAGS     += -llib/arduino/core/core.a
+# CC_FLAGS     += -llib/arduino/core/abi.cpp.o
+# CC_FLAGS     += -llib/arduino/core/CDC.cpp.o
+# CC_FLAGS     += -llib/arduino/core/HardwareSerial.cpp.o
+# CC_FLAGS     += -llib/arduino/core/HardwareSerial0.cpp.o
+# CC_FLAGS     += -llib/arduino/core/HardwareSerial1.cpp.o
+# CC_FLAGS     += -llib/arduino/core/HardwareSerial2.cpp.o
+# CC_FLAGS     += -llib/arduino/core/HardwareSerial3.cpp.o
+# CC_FLAGS     += -llib/arduino/core/hooks.c.o
+# CC_FLAGS     += -llib/arduino/core/IPAddress.cpp.o
+# CC_FLAGS     += -llib/arduino/core/main.cpp.o
+# CC_FLAGS     += -llib/arduino/core/new.cpp.o
+# CC_FLAGS     += -llib/arduino/core/PluggableUSB.cpp.o
+# CC_FLAGS     += -llib/arduino/core/Print.cpp.o
+# CC_FLAGS     += -llib/arduino/core/Stream.cpp.o
+# CC_FLAGS     += -llib/arduino/core/Tone.cpp.o
+# CC_FLAGS     += -llib/arduino/core/USBCore.cpp.o
+# CC_FLAGS     += -llib/arduino/core/WInterrupts.c.o
+# CC_FLAGS     += -llib/arduino/core/wiring.c.o
+# CC_FLAGS     += -llib/arduino/core/wiring_analog.c.o
+# CC_FLAGS     += -llib/arduino/core/wiring_digital.c.o
+# CC_FLAGS     += -llib/arduino/core/wiring_pulse.c.o
+# CC_FLAGS     += -llib/arduino/core/wiring_pulse.S.o
+# CC_FLAGS     += -llib/arduino/core/wiring_shift.c.o
+# CC_FLAGS     += -llib/arduino/core/WMath.cpp.o
+# CC_FLAGS     += -llib/arduino/core/WString.cpp.o
+
+
 # ARDUINO DEVICE
-# Specify the Vender ID, Product ID and device name.
+# Specify the Vendor ID, Product ID and device name.
 # This is used by Descriptors.c
 # GENUINE ARDUINO UNO V3
 
-ARDUINO_DEVICE_VENDORID							= 0x2A03
-ARDUINO_DEVICE_PRODUCTID 						= 0x0043
-ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino Srl (www.arduino.org)"
+ARDUINO_DEVICE_VENDORID							= 0x2341
+#ARDUINO_DEVICE_PRODUCTID 						= 0x0043
+ARDUINO_DEVICE_PRODUCTID 						= 0x0001
+
+ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino (www.arduino.cc)"
 ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Uno"
-ARDUINO_DEVICE_PRODUCT_SERIAL 			= "854393131303513111B1"
+ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 
 # MIDI DEVICE
 # Specify the Vender ID, Product ID and device name.
@@ -55,7 +95,7 @@ MIDI_DEVICE_PRODUCT_STRING 					= "USB MidiKliK BETA1 $(BUILD_STRING)"
 
 CC_FLAGS     += -DARDUINO_DEVICE_VENDORID=$(ARDUINO_DEVICE_VENDORID)
 CC_FLAGS     += -DARDUINO_DEVICE_PRODUCTID=$(ARDUINO_DEVICE_PRODUCTID)
-CC_FLAGS     += -DARDUINO_DEVICE_MANUFACTURER_STRING=$(ARDUINO_DEVICE_MANUFACTURER_STRING )
+CC_FLAGS     += -DARDUINO_DEVICE_MANUFACTURER_STRING=$(ARDUINO_DEVICE_MANUFACTURER_STRING)
 CC_FLAGS     += -DARDUINO_DEVICE_PRODUCT_STRING=$(ARDUINO_DEVICE_PRODUCT_STRING)
 CC_FLAGS     += -DARDUINO_DEVICE_PRODUCT_SERIAL=$(ARDUINO_DEVICE_PRODUCT_SERIAL)
 CC_FLAGS     += -DMIDI_DEVICE_VENDORID=$(MIDI_DEVICE_VENDORID)
