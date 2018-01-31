@@ -13,7 +13,7 @@
  *  Compiled against the last LUFA version / MIDI library
  ***********************************************************************/
 
-#include "arduino_midi_dual.h"
+#include "USBMidiKliK_dual.h"
 
 uint16_t tx_ticks = 0;
 uint16_t rx_ticks = 0;
