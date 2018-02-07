@@ -32,7 +32,7 @@
 #define DEVICE_PRODUCTID_CDC ARDUINO_DEVICE_PRODUCTID
 const USB_Descriptor_String_t PROGMEM ManufacturerStringCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_MANUFACTURER_STRING));
 const USB_Descriptor_String_t PROGMEM ProductStringCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_PRODUCT_STRING));
-//const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_PRODUCT_SERIAL));
+const USB_Descriptor_String_t PROGMEM ProductSerialCDC = USB_STRING_DESCRIPTOR(_utf8(ARDUINO_DEVICE_PRODUCT_SERIAL));
 
 // CD DEVICE DESCRIPTOR
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall

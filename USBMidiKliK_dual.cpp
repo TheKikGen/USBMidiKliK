@@ -11,6 +11,11 @@
  *               (http://morecatlab.akiba.coocan.jp/)
   *
  *  Compiled against the last LUFA version / MIDI library
+
+        USB                        ATMEGA8U2                    ATMEGA 328P
+   --------------      ------------------------------         ---------------
+   IN Endpoint  o<-----o USBOUT | usbMidiKliK |  RX o<--------o (TX) MIDI IN
+   OUT Endpoint o----->o USBIN  |  firmware   |  TX o-------->o (RX) MIDI OUT
  ***********************************************************************/
 
 #include "USBMidiKliK_dual.h"
@@ -22,9 +27,7 @@ const uint16_t TICK_COUNT = 3000;
 bool MIDIBootMode  = false;
 bool MIDIHighSpeed = false;	// 0: normal speed(31250bps), 1: high speed (1250000bps)
 uint8_t UsbMIDITagPacket = 0x00 ;  	// Used to tag MIDI events when sending to serial if
-																		// required. So it is possible to distinguish
-																		// serial MIDI message from USB ones.
-uint8_t UsbMIDITagPacketLong = 0x00;// Long or short packet
+																		// required. So it is possible to get CN
 
 // Ring Buffers
 
@@ -339,7 +342,7 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
 {
 	static  MIDI_EventPacket_t MIDIEvent;
 	static  bool sysExMode = false;					// True if SYSEX active
-	static 	bool MTCFrame=false;						// True if waiting the seconde MTC byte
+	static 	bool MTCFrame=false;						// True if waiting the second MTC byte
 																					// MTC is a REALTIME msg
 	static  uint8_t dataBufferIndex = 0;		// Index on Data1 to Data3
   static  uint8_t nextMidiMsgLength=0;		// Len of the current midi message processed
@@ -437,25 +440,22 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
  // USB MIDI packet tagging activation
  // NOT STANDARD !!!  SPECIFIC TO USBMIDIKLIK
  ////////////////////////////////////////////////
- // The message status is defined in MidiKlik.H
+ // The message status is defined in usbMidiKlik.H
  // Use only an undefined one and this if bloc must
  // stay here, before the reserved/undefines if bloc.
  // This should be totally transparent to any device.
  // Later : better to implement that with SYSEX...
  if ( receivedByte == USBMIDI_PKTAG ) {
 		 //  MIDI Message is 2 bytes, structured as follow :
-		 //  ss [pp-aa]
-		 //  ss : Status byte = USBMIDI_PKTAG
-		 //  [pp : 4 bits. 0 = Tagging stop. !=0 tagging starts
-		 //  aa] : 4 bits : short packet / 1: long packet
-		 // Long packets include the CN/CIN. This can be usefull
-		 // for debugging or routing reasons.
-		 //  0XFD 0X10  :  Activate tagging with short packet
-		 //  0XFD 0X00  :  Inactive tagging
-		 //  0XFD 0X11  :  Activate tagging with long packet
+		 //  [USBMIDI_PKTAG] 00X00  :  Inactivate tagging
+		 //  [USBMIDI_PKTAG] 01X01  :  Activate tagging
+		 //  [USBMIDI_PKTAG] 01X02  :  Get tagging current status
 		 //
 		 // Packet Tagging looks like :
 		 // [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
+
+		 // A tagged packet includes the CN/CIN. This can be usefull
+		 // for debugging or routing reasons.
 
 		 // Fill the USB packet header.
 		 MIDIEvent.Event     = 0x02; /* 2 - two-byte system common message */
@@ -551,12 +551,30 @@ static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dat
 {
 
 	// Intercept the tagging packet command
+	//  MIDI Message is 2 bytes, structured as follow :
+	//  [USBMIDI_PKTAG] 00X00  :  Inactivate tagging
+	//  [USBMIDI_PKTAG] 01X01  :  Activate tagging
+	//  [USBMIDI_PKTAG] 01X02  :  Get tagging current status
+	//
+	// Packet Tagging looks like :
+	// [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
+
+	// Long packets include the CN/CIN. This can be usefull
+	// for debugging or routing reasons.
+	// NB : This command is unidirectionnal, from serial only.
+
 	if ( MIDIEvent->Data1 == USBMIDI_PKTAG ) {
-			// Toggle mod
-			// Ex :  0XFD 0X11  :  Activate tagging with long packet
-			// NB : This command is unidirectionnal, from serial only.
-			UsbMIDITagPacket = (bool)MIDIEvent->Data1 & 0X10;
-			UsbMIDITagPacketLong = (bool)MIDIEvent->Data1 & 0X01;
+			// Current status
+			if ( MIDIEvent->Data2 == 0X02 ) {
+				if ( Serial_IsSendReady() ) {
+					Serial_SendByte(USBMIDI_PKTAG); // A first time as Tag
+					Serial_SendByte(USBMIDI_PKTAG); // A second time as message type
+					Serial_SendByte( UsbMIDITagPacket );
+				}
+			} else {
+			// Set
+					UsbMIDITagPacket = MIDIEvent->Data2 ;
+			}
 			// This is not obviously for USB !
 			return;
 	}
@@ -577,6 +595,7 @@ static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dat
 // USB MIDI will do all the parsing stuff for us.
 // We just need to get the length of the MIDI message embedded in the packet
 // ex : Note-on message on virtual cable 1 (CN=0x1; CIN=0x9) 	19 9n kk vv => 9n kk vv
+// ex : tagged Note-on message on virtual cable 1 :  	19 9n kk vv => FD 19 9n kk vv
 static void ProcessUsbToMidi(void)
 {
 	MIDI_EventPacket_t MIDIEvent;
@@ -592,7 +611,7 @@ static void ProcessUsbToMidi(void)
 						// if Tagging mode active, TAG ONLY TO SERIAL
 						if (UsbMIDITagPacket) {
 							Serial_SendByte(USBMIDI_PKTAG);
-							if (UsbMIDITagPacketLong) Serial_SendByte(MIDIEvent.Event);
+							Serial_SendByte(MIDIEvent.Event);
 						}
 						Serial_SendData	(	(void *)&MIDIEvent.Data1, BytesIn);
 
