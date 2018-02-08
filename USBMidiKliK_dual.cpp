@@ -353,6 +353,48 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
 	////////////////////// SYSTEM COMMON MESSAGES ///////////////////////////////
 
 	////////////////////////////////////////////////
+	// USB MIDI packet tagging activation
+	// NOT STANDARD !!!  SPECIFIC TO USBMIDIKLIK
+	////////////////////////////////////////////////
+	// The message status is defined in usbMidiKlik.H
+	// Use only an undefined one and this if bloc must
+	// stay here, before the reserved/undefines if bloc.
+	// This should be totally transparent to any device.
+	// Later : better to implement that with SYSEX...
+	if ( receivedByte == USBMIDI_PKTAG ) {
+			//  MIDI Message is 2 bytes, structured as follow :
+			//  [USBMIDI_PKTAG] 00X00  :  Inactivate tagging
+			//  [USBMIDI_PKTAG] 01X01  :  Activate tagging
+			//  [USBMIDI_PKTAG] 01X02  :  Get tagging current status
+			//
+			// Packet Tagging looks like :
+			// [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
+
+			// A tagged packet includes the CN/CIN. This can be usefull
+			// for debugging or routing reasons.
+
+			// Fill the USB packet header.
+			MIDIEvent.Event     = 0x02; /* 2 - two-byte system common message */
+			nextMidiMsgLength 	 = 2;
+			dataBufferIndex 		 = 0;
+			lastVoiceStatus 		 = 0;
+	}
+
+	else
+
+	////////////////////////////////////////////////
+  // RESERVED
+  // 11110100= F4= 244 Undefined (Reserved)  --- ---
+  // 11110101= F5= 245 Undefined (Reserved)  --- ---
+  // 11111001= F9= 249 Undefined (Reserved)  --- ---
+  // 11111101= FD= 253 Undefined (Reserved)  --- ---
+
+  if (receivedByte == 0xF4 || receivedByte == 0xF5 ||
+ 		 receivedByte == 0xF9 || receivedByte == 0xFD)
+ 		 return false;
+  else
+
+	////////////////////////////////////////////////
   // REAL TIME MESSAGES
 	// 11111000= F8= 248 Timing clock  none  none
   // 11111010= FA= 250 Start none  none
@@ -436,47 +478,7 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
       lastVoiceStatus = 0;
  } else
 
- ////////////////////////////////////////////////
- // USB MIDI packet tagging activation
- // NOT STANDARD !!!  SPECIFIC TO USBMIDIKLIK
- ////////////////////////////////////////////////
- // The message status is defined in usbMidiKlik.H
- // Use only an undefined one and this if bloc must
- // stay here, before the reserved/undefines if bloc.
- // This should be totally transparent to any device.
- // Later : better to implement that with SYSEX...
- if ( receivedByte == USBMIDI_PKTAG ) {
-		 //  MIDI Message is 2 bytes, structured as follow :
-		 //  [USBMIDI_PKTAG] 00X00  :  Inactivate tagging
-		 //  [USBMIDI_PKTAG] 01X01  :  Activate tagging
-		 //  [USBMIDI_PKTAG] 01X02  :  Get tagging current status
-		 //
-		 // Packet Tagging looks like :
-		 // [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
 
-		 // A tagged packet includes the CN/CIN. This can be usefull
-		 // for debugging or routing reasons.
-
-		 // Fill the USB packet header.
-		 MIDIEvent.Event     = 0x02; /* 2 - two-byte system common message */
-		 nextMidiMsgLength 	 = 2;
-		 dataBufferIndex 		 = 0;
-		 lastVoiceStatus 		 = 0;
- }
-
- else
-
- ////////////////////////////////////////////////
- // RESERVED
- // 11110100= F4= 244 Undefined (Reserved)  --- ---
- // 11110101= F5= 245 Undefined (Reserved)  --- ---
- // 11111001= F9= 249 Undefined (Reserved)  --- ---
- // 11111101= FD= 253 Undefined (Reserved)  --- ---
-
- if (receivedByte == 0xF4 || receivedByte == 0xF5 ||
-		 receivedByte == 0xF9 || receivedByte == 0xFD)
-		 return false;
- else
 
   ////////////////////// CHANNEL VOICES MESSAGES //////////////////////
  if (receivedByte >= 0x80)  {
