@@ -19,12 +19,10 @@
 
 void setup() {
 
-  // Initiate Serial for MIDI communications
-  Serial.begin(31250); // USB Serial
-
   // Make Arduino transparent for serial communications from and to USB
   pinMode(0,INPUT); // Arduino RX - ATMEGA8U2 TX
   pinMode(1,INPUT); // Arduino TX - ATMEGA8U2 RX
+
 
 }
 

@@ -280,10 +280,10 @@ static void ProcessMidiUsbMode(void) {
 	for (;;) {
 
 		if (tx_ticks > 0) tx_ticks--;
-		else if (tx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED2);
+		else if (tx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED1);
 
 		if (rx_ticks > 0) rx_ticks--;
-		else if (rx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED1);
+		else if (rx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED2);
 
 		ProcessUsbToMidi();
 		// NB : ProcessMidiToUsb is done in the ISR directly because of
@@ -587,7 +587,7 @@ static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dat
  	MIDI_Device_SendEventPacket(&Keyboard_MIDI_Interface, MIDIEvent);
 	MIDI_Device_Flush(&Keyboard_MIDI_Interface);
 
-	LEDs_TurnOnLEDs(LEDS_LED1);
+	LEDs_TurnOnLEDs(LEDS_LED2);
 	rx_ticks = TICK_COUNT;
 }
 
@@ -617,7 +617,7 @@ static void ProcessUsbToMidi(void)
 						}
 						Serial_SendData	(	(void *)&MIDIEvent.Data1, BytesIn);
 
-						LEDs_TurnOnLEDs(LEDS_LED2);
+						LEDs_TurnOnLEDs(LEDS_LED1);
 						tx_ticks = TICK_COUNT;
 					}
 			}
