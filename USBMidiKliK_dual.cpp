@@ -35,6 +35,7 @@ static RingBuffer_t USBtoUSART_Buffer;           // Circular buffer to hold host
 static uint8_t      USBtoUSART_Buffer_Data[128]; // USB to USART_Buffer
 static RingBuffer_t USARTtoUSB_Buffer;           // Circular buffer to hold data from the serial port
 static uint8_t      USARTtoUSB_Buffer_Data[128]; // USART to USB_Buffer
+volatile uint8_t    rxByte;										 // Used in ISR
 
 extern USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface;
 extern USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface;
@@ -355,6 +356,7 @@ static bool ProcessMidiToUsb()
   static  uint8_t nextMidiMsgLength=0;		// Len of the current midi message processed
   static  uint8_t lastVoiceStatus=0;			// Used for running status
 
+
 	if (USB_DeviceState != DEVICE_STATE_Configured) return false;
 
 	// Get a byte from the ring buffer
@@ -573,11 +575,9 @@ static void ProcessUsbToMidi(void)
 			uint8_t CIN = MIDIEvent.Event & 0x0F;
 			if (CIN >= 2 ) {
 					uint8_t BytesIn = BytesIn_USB_MIDI_Command[CIN];
-					while (BytesIn ) {
-							RingBuffer_Insert(&USBtoUSART_Buffer, * ( &MIDIEvent.Data1 + 3- BytesIn ) );
-							BytesIn -- ;
-					}
-
+					RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data1 );
+					if ( BytesIn >=2 ) RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data2 );
+					if ( BytesIn ==3 ) RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data3 );
 			}
 	}
 }
@@ -589,7 +589,6 @@ static void ProcessUsbToMidi(void)
 // Parse via Arduino/Serial
 ISR(USART1_RX_vect, ISR_BLOCK)
 {
-	uint8_t ReceivedByte = UDR1;
-
-	RingBuffer_Insert(&USARTtoUSB_Buffer, ReceivedByte);
+	rxByte = UDR1;
+	RingBuffer_Insert(&USARTtoUSB_Buffer, rxByte);
 }
