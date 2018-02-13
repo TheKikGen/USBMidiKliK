@@ -274,7 +274,15 @@ static void ProcessSerialUsbMode(void) {
 // ----------------------------------------------------------------------------
 static void ProcessMidiUsbMode(void) {
 
-	UCSR1B |= (1 << RXCIE1 ); // Enable the USART Receive Complete interrupt ( USART_RXC )
+	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
+	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
+
+  // Enable USART receive complete interrupt, transmitter, receiver
+	UCSR1B = 0;
+	UCSR1B = ((1 << RXCIE1) | (1 << TXEN1) | (1 << RXEN1));
+
+	PORTB  = 0x0E;	       /* PORTB1 = HIGH (LED ON) */
+
 	GlobalInterruptEnable();
 
 	for (;;) {
@@ -285,9 +293,8 @@ static void ProcessMidiUsbMode(void) {
 		if (rx_ticks > 0) rx_ticks--;
 		else if (rx_ticks == 0) LEDs_TurnOffLEDs(LEDS_LED2);
 
+		ProcessMidiToUsb();
 		ProcessUsbToMidi();
-		// NB : ProcessMidiToUsb is done in the ISR directly because of
-		// real time aspects
 
 		USB_USBTask();
 	}
@@ -338,7 +345,7 @@ static const int BytesIn_USB_MIDI_Command[] =
 // Check whether we've received any MIDI data from the USART, and if it's
 // complete send it over USB. return true if a packet was sent
 // ----------------------------------------------------------------------------
-static bool ProcessMidiToUsb(uint8_t receivedByte)
+static bool ProcessMidiToUsb()
 {
 	static  MIDI_EventPacket_t MIDIEvent;
 	static  bool sysExMode = false;					// True if SYSEX active
@@ -350,56 +357,21 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
 
 	if (USB_DeviceState != DEVICE_STATE_Configured) return false;
 
+	// Get a byte from the ring buffer
+	if ( RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) return false;
+
+	uint8_t receivedByte = RingBuffer_Remove(&USARTtoUSB_Buffer) ;
+
 	////////////////////// SYSTEM COMMON MESSAGES ///////////////////////////////
-
-	////////////////////////////////////////////////
-	// USB MIDI packet tagging activation
-	// NOT STANDARD !!!  SPECIFIC TO USBMIDIKLIK
-	////////////////////////////////////////////////
-	// The message status is defined in usbMidiKlik.H
-	// Use only an undefined one and this if bloc must
-	// stay here, before the reserved/undefines if bloc.
-	// This should be totally transparent to any device.
-	// Later : better to implement that with SYSEX...
-	if ( receivedByte == USBMIDI_PKTAG ) {
-			//  MIDI Message is 2 bytes, structured as follow :
-			//  [USBMIDI_PKTAG] 00X00  :  Inactivate tagging
-			//  [USBMIDI_PKTAG] 01X01  :  Activate tagging
-			//  [USBMIDI_PKTAG] 01X02  :  Get tagging current status
-			//
-			// Packet Tagging looks like :
-			// [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
-
-			// A tagged packet includes the CN/CIN. This can be usefull
-			// for debugging or routing reasons.
-
-			// Fill the USB packet header.
-			MIDIEvent.Event     = 0x02; /* 2 - two-byte system common message */
-			nextMidiMsgLength 	 = 2;
-			dataBufferIndex 		 = 0;
-			lastVoiceStatus 		 = 0;
-	}
-
-	else
-
-	////////////////////////////////////////////////
-  // RESERVED
-  // 11110100= F4= 244 Undefined (Reserved)  --- ---
-  // 11110101= F5= 245 Undefined (Reserved)  --- ---
-  // 11111001= F9= 249 Undefined (Reserved)  --- ---
-  // 11111101= FD= 253 Undefined (Reserved)  --- ---
-
-  if (receivedByte == 0xF4 || receivedByte == 0xF5 ||
- 		 receivedByte == 0xF9 || receivedByte == 0xFD)
- 		 return false;
-  else
 
 	////////////////////////////////////////////////
   // REAL TIME MESSAGES
 	// 11111000= F8= 248 Timing clock  none  none
+  // 11111001= F9= 249 Undefined (Reserved)  --- ---
   // 11111010= FA= 250 Start none  none
   // 11111011= FB= 251 Continue  none  none
   // 11111100= FC= 252 Stop  none  none
+	// 11111101= FD= 253 Undefined (Reserved)  --- ---
   // 11111110= FE= 254 Active Sensing  none  none
   // 11111111= FF= 255 System Reset  none  none
 
@@ -410,6 +382,15 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
        MIDI_SendEventPacket(&MIDIEvent,1);
        return true;
   } else
+
+	////////////////////////////////////////////////
+  // RESERVED
+  // 11110100= F4= 244 Undefined (Reserved)  --- ---
+  // 11110101= F5= 245 Undefined (Reserved)  --- ---
+
+  if (receivedByte == 0xF4 || receivedByte == 0xF5 )
+ 		 return false;
+  else
 
 	// 11110001= F1= 241 MIDI Time Code Qtr. Frame -see spec-  -see spec-
 	// Midi Quarter Frame MTC
@@ -552,34 +533,6 @@ static bool ProcessMidiToUsb(uint8_t receivedByte)
 static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dataSize)
 {
 
-	// Intercept the tagging packet command
-	//  MIDI Message is 2 bytes, structured as follow :
-	//  [USBMIDI_PKTAG] 00X00  :  Inactivate tagging
-	//  [USBMIDI_PKTAG] 01X01  :  Activate tagging
-	//  [USBMIDI_PKTAG] 01X02  :  Get tagging current status
-	//
-	// Packet Tagging looks like :
-	// [USBMIDI_PKTAG][CN/CIN][Data1][Data2][Data3]
-
-	// Long packets include the CN/CIN. This can be usefull
-	// for debugging or routing reasons.
-	// NB : This command is unidirectionnal, from serial only.
-
-	if ( MIDIEvent->Data1 == USBMIDI_PKTAG ) {
-			// Current status
-			if ( MIDIEvent->Data2 == 0X02 ) {
-				if ( Serial_IsSendReady() ) {
-					Serial_SendByte(USBMIDI_PKTAG); // A first time as Tag
-					Serial_SendByte(USBMIDI_PKTAG); // A second time as message type
-					Serial_SendByte( UsbMIDITagPacket );
-				}
-			} else {
-			// Set
-					UsbMIDITagPacket = MIDIEvent->Data2 ;
-			}
-			// This is not obviously for USB !
-			return;
-	}
 	// Zero padding
   if (dataSize < 3 ) {
          memset(  (void*) (&MIDIEvent->Data1 + dataSize),0, 3 - dataSize);
@@ -602,24 +555,29 @@ static void ProcessUsbToMidi(void)
 {
 	MIDI_EventPacket_t MIDIEvent;
 
-	while (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent))
-	{
-			// Passthrough to Arduino
+	// Load the next byte from the USB/USART transmit buffer into the USART
+	// if transmit buffer space is available
+
+	if ( !(RingBuffer_IsEmpty(&USBtoUSART_Buffer)) && Serial_IsSendReady() ) {
+		Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
+		LEDs_TurnOnLEDs(LEDS_LED1);
+		tx_ticks = TICK_COUNT;
+	}
+
+	// Do not read the USB Midi command if not enough room in the USART buffer
+	// 4 bytes for an USB Midi event
+	if ( RingBuffer_GetFreeCount(&USBtoUSART_Buffer) < 4 ) return;
+
+	/* Check if a MIDI command has been received */
+	if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent)) {
 			uint8_t CIN = MIDIEvent.Event & 0x0F;
 			if (CIN >= 2 ) {
 					uint8_t BytesIn = BytesIn_USB_MIDI_Command[CIN];
-					if ( Serial_IsSendReady() ) {
-
-						// if Tagging mode active, TAG ONLY TO SERIAL
-						if (UsbMIDITagPacket) {
-							Serial_SendByte(USBMIDI_PKTAG);
-							Serial_SendByte(MIDIEvent.Event);
-						}
-						Serial_SendData	(	(void *)&MIDIEvent.Data1, BytesIn);
-
-						LEDs_TurnOnLEDs(LEDS_LED1);
-						tx_ticks = TICK_COUNT;
+					while (BytesIn ) {
+							RingBuffer_Insert(&USBtoUSART_Buffer, * ( &MIDIEvent.Data1 + 3- BytesIn ) );
+							BytesIn -- ;
 					}
+
 			}
 	}
 }
@@ -633,7 +591,5 @@ ISR(USART1_RX_vect, ISR_BLOCK)
 {
 	uint8_t ReceivedByte = UDR1;
 
-	if (MIDIBootMode )
-			ProcessMidiToUsb(ReceivedByte);
-	else RingBuffer_Insert(&USARTtoUSB_Buffer, ReceivedByte);
+	RingBuffer_Insert(&USARTtoUSB_Buffer, ReceivedByte);
 }

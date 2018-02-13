@@ -53,7 +53,7 @@
 
 	static void ProcessSerialUsbMode(void);
 	static void ProcessMidiUsbMode(void);
-	static bool ProcessMidiToUsb(uint8_t);
+	static bool ProcessMidiToUsb(void);
 	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *,uint8_t);
 	static void ProcessUsbToMidi(void);
 
