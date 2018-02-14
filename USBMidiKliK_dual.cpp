@@ -5,12 +5,12 @@
  *  Based on :
  *     . The wonderful LUFA low-level midi lib and examples by Dean Camera
  *               (http://www.fourwalledcubicle.com/LUFA.php)
- *     . Inspired by HIDUINO by Dimitri Diakopoulos
+ *     . Inspired by HIDUINO from Dimitri Diakopoulos
  *               (http://www.dimitridiakopoulos.com)
- *     . Inspired also by dualMocoLUFA Project by morecat_la
+ *     . Inspired also by dualMocoLUFA Project from morecat_lab
  *               (http://morecatlab.akiba.coocan.jp/)
   *
- *  Compiled against the last LUFA version / MIDI library
+ *  Compiled against the last LUFA version.
 
         USB                        ATMEGA8U2                    ATMEGA 328P
    --------------      ------------------------------         ---------------
