@@ -25,9 +25,11 @@ uint16_t rx_ticks = 0;
 const uint16_t TICK_COUNT = 3000;
 
 bool MIDIBootMode  = false;
-bool MIDIHighSpeed = false;	// 0: normal speed(31250bps), 1: high speed (1250000bps)
+bool MIDISerialRxParse = true ; 	  // Use 1 byte packet to USB without parsing if false
 uint8_t UsbMIDITagPacket = 0x00 ;  	// Used to tag MIDI events when sending to serial if
 																		// required. So it is possible to get CN
+
+
 
 // Ring Buffers
 
@@ -66,7 +68,7 @@ int  main(void)
 // Original inspiration from dualMocoLUFA Project by morecat_lab
 //     http://morecatlab.akiba.coocan.jp/
 //
-// Note : When PB3 is grounded, this allows the HighSpeed mode for MIDI
+// Note : When PB3 is grounded, this allows the No midi serial RX parsing
 ///////////////////////////////////////////////////////////////////////////////
 
 void SetupHardware(void)
@@ -83,20 +85,19 @@ void SetupHardware(void)
 
 	// Pins assignments :
 	// PB1 = LED
-	// PB2 = (MIDI/ Arduino SERIAL)
-	// PB3 = (NORMAL/HIGH) SPEED
+	// PB2 = MIDI / Arduino SERIAL when grounded
+	// PB3 = No RX serial parsing when grounded
 
   DDRB  = 0x02;		// SET PB1 as OUTPUT and PB2/PB3 as INPUT
   PORTB = 0x0C;		// PULL-UP PB2/PB3
 
-	MIDIBootMode  = ( (PINB & 0x04) == 0 ) ? false : true;
-	MIDIHighSpeed = ( (PINB & 0x08) == 0 ) ? true  : false ;
+	MIDIBootMode  		= ( (PINB & 0x04) == 0 ) ? false : true;
+	MIDISerialRxParse = ( (PINB & 0x08) == 0 ) ? false : true;
 
-  if (MIDIBootMode) {
-		if ( MIDIHighSpeed ) Serial_Init(1250000, false);
-		else 		Serial_Init(31250, false);
-	}
-	else Serial_Init(9600, false);
+  if (MIDIBootMode)
+		Serial_Init(31250, false);
+	else
+		Serial_Init(9600, false);
 
 	/* Hardware Initialization */
 	LEDs_Init();
@@ -348,186 +349,196 @@ static const int BytesIn_USB_MIDI_Command[] =
 // ----------------------------------------------------------------------------
 static bool ProcessMidiToUsb()
 {
-	static  MIDI_EventPacket_t MIDIEvent;
-	static  bool sysExMode = false;					// True if SYSEX active
-	static 	bool MTCFrame=false;						// True if waiting the second MTC byte
-																					// MTC is a REALTIME msg
-	static  uint8_t dataBufferIndex = 0;		// Index on Data1 to Data3
-  static  uint8_t nextMidiMsgLength=0;		// Len of the current midi message processed
-  static  uint8_t lastVoiceStatus=0;			// Used for running status
+  static  MIDI_EventPacket_t MIDIEvent;
+  MIDI_EventPacket_t         xMIDIEvent;  // Event to process specific cases like RT
+
+  static  bool sysExMode    = false;	 		// True if SYSEX active
+
+  static  uint8_t dataBufferIndex = 0;		// Index on Data1 to Data3
+  static  uint8_t nextMidiMsgLength=0;		// Len of the midi message to be processed
+  static  uint8_t runningStatus=0;				// Used for running status
 
 
-	if (USB_DeviceState != DEVICE_STATE_Configured) return false;
+  if (USB_DeviceState != DEVICE_STATE_Configured) return false;
 
 	// Get a byte from the ring buffer
-	if ( RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) return false;
+  if ( RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) return false;
 
 	uint8_t receivedByte = RingBuffer_Remove(&USARTtoUSB_Buffer) ;
 
-	////////////////////// SYSTEM COMMON MESSAGES ///////////////////////////////
+// Does the parsing is required ?
+// As explained in section 4, page 17, note 2, of MIDI10 (Universal Serial
+// Bus Device Class Definition - Release 1.0 Nov1, 1999), it is possible to
+// send packets without parsing anything. This is perfectly MIDI compliant :
+// "CIN=0xF, Single Byte: in some special cases, an application may prefer not
+// to use parsed MIDI events. Using CIN=0xF, a MIDI data stream may be
+// transferred by placing each individual byte in one 32 Bit USB-MIDI Event
+// Packet. This way, any MIDI data may be transferred without being parsed."
+//
+// HOWEVER  : it will not work with most of USB MIDI drivers and midi apps.
+// So, better to use that for debuging purpose.
 
-	////////////////////////////////////////////////
-  // REAL TIME MESSAGES
-	// 11111000= F8= 248 Timing clock  none  none
-  // 11111001= F9= 249 Undefined (Reserved)  --- ---
-  // 11111010= FA= 250 Start none  none
-  // 11111011= FB= 251 Continue  none  none
-  // 11111100= FC= 252 Stop  none  none
-	// 11111101= FD= 253 Undefined (Reserved)  --- ---
-  // 11111110= FE= 254 Active Sensing  none  none
-  // 11111111= FF= 255 System Reset  none  none
+	if (  ! MIDISerialRxParse ) {
+			 MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
+			 MIDIEvent.Data1    = receivedByte;
+			 // Send immediatly
+			 MIDI_SendEventPacket(&MIDIEvent,1);
+			 return true;
+	}
+
+////////////////////// SYSTEM COMMON MESSAGES ///////////////////////////////
+
+////////////////////////////////////////////////
+// REAL TIME MESSAGES
+// 11111000= F8= 248 Timing clock  none  none
+// 11111001= F9= 249 Undefined (Reserved)  --- ---
+// 11111010= FA= 250 Start none  none
+// 11111011= FB= 251 Continue  none  none
+// 11111100= FC= 252 Stop  none  none
+// 11111101= FD= 253 Undefined (Reserved)  --- ---
+// 11111110= FE= 254 Active Sensing  none  none
+// 11111111= FF= 255 System Reset  none  none
 
 	if ( receivedByte >= 0xF8 ) {
-       MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
-       MIDIEvent.Data1    = receivedByte;
+			 // Do not use current event struct , making real time transparent, notably
+			 // when in SYSEX mode
+       xMIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
+       xMIDIEvent.Data1    = receivedByte;
 			 // Send immediatly
-       MIDI_SendEventPacket(&MIDIEvent,1);
+       MIDI_SendEventPacket(&xMIDIEvent,1);
        return true;
-  } else
+  }
 
-	////////////////////////////////////////////////
-  // RESERVED
-  // 11110100= F4= 244 Undefined (Reserved)  --- ---
-  // 11110101= F5= 245 Undefined (Reserved)  --- ---
+////////////////////////////////////////////////
+// SYSTEM EXCLUSIVE
+////////////////////////////////////////////////
+	if (sysExMode ) {
+			if ( receivedByte >= 0x80 )	 {
+				// End of SysEx -- send the last bytes
+				// SYSEX can be terminated by an F7 (EOX) or
+				// any other status byte except real time
+				// Force EOX in any cases to be clean
+				sysExMode = false;
 
-  if (receivedByte == 0xF4 || receivedByte == 0xF5 )
- 		 return false;
-  else
+				* ( &MIDIEvent.Data1 + dataBufferIndex++ ) = 0XF7 ;
+				MIDIEvent.Event     = 0x4 + dataBufferIndex;
+				MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
+				dataBufferIndex = 0;
 
-	// 11110001= F1= 241 MIDI Time Code Qtr. Frame -see spec-  -see spec-
-	// Midi Quarter Frame MTC
-  if (receivedByte == 0xF1 ) {
-			lastVoiceStatus = 0; // Cancel any running status
-			MIDIEvent.Event    = 0x2; // 2 - two-byte system common message
-			MIDIEvent.Data1    = receivedByte;
-			MTCFrame = true;
-			return false;
-	} else if (MTCFrame) {
-			MIDIEvent.Data2    = receivedByte;
-			// Send immediatly
-			MIDI_SendEventPacket(&MIDIEvent,2);
-			MTCFrame = false;
-			return true;
+				if ( receivedByte == 0xF7 ) return true;
+
+			}
+		  else {
+				// SYSEX DATA
+				* ( &MIDIEvent.Data1 + dataBufferIndex++ ) =  receivedByte ;
+				// Packet full ?
+				if (dataBufferIndex == 3)  {
+					MIDIEvent.Event     = 0x4;
+					MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
+					dataBufferIndex = 0;
+					return true;
+				}
+				return false;
+			}
+	}
+	// Ignore EOX when not in SYSEX mode
+	else if (receivedByte == 0xF7 ) return false;
+
+////////////////////////////////////////////////
+// SYSTEM COMMON messages
+////////////////////////////////////////////////
+
+	// Clear RUNNING Status
+	if (receivedByte >= 0xF0 ) runningStatus 	= 0;
+
+	// SYSEX START
+	if (receivedByte == 0xF0 ) {
+			sysExMode 					= true;  	// Start SYSEX packets
+			MIDIEvent.Data1    	= receivedByte;
+			dataBufferIndex 		= 1;
+			return false;		  	// Stay at the sysex level parsing above
 	} else
 
-	////////////////////////////////////////////////
-	// SYSTEM EXCLUSIVE
-	// 11110000= F0= 240  System Exclusive  **  **
+  // RESERVED SYSTEM COMMON
+	if (receivedByte == 0xF4 || receivedByte == 0xF5 ) {
+		return false;
+	} else
 
-  if (receivedByte == 0xF0 ) {
-      sysExMode = true;  // Start SYSEX
-      dataBufferIndex = 0;
-      lastVoiceStatus = 0;
-  } else
+	// Midi Quarter Frame MTC
+  if (receivedByte == 0xF1 ) {
+			MIDIEvent.Event    	= 0x2; // 2 - two-byte system common message
+      nextMidiMsgLength 	= 2; 		// This is an exception. We must fix the length...
+      dataBufferIndex 		= 0;
+	} else
 
-  // END OF SYSEX
-  // 11110111= F7= 247 End of SysEx (EOX)  none  none
-  if (receivedByte == 0xF7 ) {
-			lastVoiceStatus = 0;
-      sysExMode = false; // SYSEX END
-  } else
-
-  ////////////////////////////////////////////////
-  // OTHERS COMMON MESSAGES
-  // 11110010= F2= 242 Song Position Pointer LSB MSB
-  // 11110011= F3= 243 Song Select (Song #)  (0-127) none
-	// 11110110= F6= 246 Tune request  none  none
-  if ( receivedByte == 0xF6 ) {
-       MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
-       MIDIEvent.Data1    = receivedByte;
-			 // Send immediatly
-       MIDI_SendEventPacket(&MIDIEvent,1);
-       return true;
-  } else
-
-  // Song position
+	// Song position
   if ( receivedByte == 0xF2){
-      // Fill the USB packet header. Keep the CIN only.
       MIDIEvent.Event     = 0x3; // 3 - three-byte system common message */
-      // This is an exception. We must fix the length...
-      nextMidiMsgLength = 3;
-      dataBufferIndex = 0;
-      lastVoiceStatus = 0;
-
+      nextMidiMsgLength 	= 3; 	 // This is an exception. We must fix the length...
+      dataBufferIndex 		= 0;
   } else
 
-  // Song select
+	// Song select
   if (receivedByte == 0xF3  ) {
-      // Fill the USB packet header. Keep the CIN only.
       MIDIEvent.Event     = 0x2; // 2 - two-byte system common message
-      // This is an exception. We must fix the length...
-      nextMidiMsgLength = 2;
-      dataBufferIndex = 0;
-      lastVoiceStatus = 0;
+      nextMidiMsgLength 	= 2;	 // This is an exception. We must fix the length...
+      dataBufferIndex 		= 0;
  } else
 
+	// Tune Request
+	if ( receivedByte == 0xF6 ) {
+       MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
+			 nextMidiMsgLength 	= 1;
+			 dataBufferIndex 		= 0;
+  } else
 
+////////////////////////////////////////////////
+// CHANNEL MESSAGES
+////////////////////////////////////////////////
 
-  ////////////////////// CHANNEL VOICES MESSAGES //////////////////////
- if (receivedByte >= 0x80)  {
-
-	  // Still some data to send here ?
-    // Not normal. Probably a message dropped...
-    // if (dataBufferIndex > 0 ) {
-    // -[PACKET DROPPED]"
-    //}
-		// =>Incomplete messages due to latency are purely ignored
-
+  if (receivedByte >= 0x80)  {
     // A new status byte from serial midi */
     // Fill the USB packet header. Keep the CIN only.
+		// Get the data length for this status byte from the table
     MIDIEvent.Event     = (receivedByte >> 4);
-    // Get the data length for this status byte from the table
     nextMidiMsgLength = BytesIn_USB_MIDI_Command[MIDIEvent.Event];
-    // Reset the data index . That was the first byte.
     dataBufferIndex = 0;
-    lastVoiceStatus = receivedByte;
-  }
+    runningStatus = receivedByte; // Running status
+  } else
 
-  else if (dataBufferIndex == 0 && !sysExMode)
+////////////////////////////////////////////////
+// MIDI DATA FROM 00 TO 0X7F
+////////////////////////////////////////////////
+	if ( dataBufferIndex == 0  )
   {
-    // Running status
+    // If the previous packet was sent, and we get no status byte,
+		// we can apply Running status.
     // 0x90 0x3C 0x7F 0x3C 0x00     <- Note-On Note-Off
-    if ( lastVoiceStatus >0 ) {
+    if ( runningStatus >0 ) {
       // As we never delete the MIDI packet, we still have the previous command
-      // and status bytes. So we simply update the data and index.
+      // and status bytes. So we simply update the data index.
       // Move to data 2
       dataBufferIndex ++;
-    } else return false;
+			runningStatus = 0;
+    } else return false; // Ignore data according MIDI specs
   }
 
-	 //////////////// Fill Packet data ///////////////////////
+////////////////////////////////////////////////
+// Fill Packet data
+////////////////////////////////////////////////
 
-   * ( &MIDIEvent.Data1 + dataBufferIndex) = receivedByte ;
-   dataBufferIndex++;
+   * ( &MIDIEvent.Data1 + dataBufferIndex++) = receivedByte ;
 
-  /////////////// Process SYSEX ////////////////////////////
-  if (sysExMode) {
-    // Packet full ?
-    if (dataBufferIndex == 3)  {
-      MIDIEvent.Event     = 0x4;
-      MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
-      dataBufferIndex = 0;
-      return true;
-    }
-  }
-  else if (receivedByte == 0xF7)
-  {
-    // End of SysEx -- send the last bytes
-    MIDIEvent.Event     = 0x4 + dataBufferIndex;
-    MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
-    dataBufferIndex = 0;
-    lastVoiceStatus = 0;
-    return true;
-  }
-	/////////////// Send complete packet to USB //////////////
-	else if (dataBufferIndex == nextMidiMsgLength)
-  {
+	// Send complete packet to USB
+	if (dataBufferIndex == nextMidiMsgLength) {
     MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
     dataBufferIndex = 0;
     return true;
   }
+
   return false;
 }
+
 // ----------------------------------------------------------------------------
 // Send a MIDI Event packet to the USB
 // ----------------------------------------------------------------------------
