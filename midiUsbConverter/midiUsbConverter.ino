@@ -20,13 +20,33 @@
 void setup() {
 
   // Make Arduino transparent for serial communications from and to USB
-  pinMode(0,INPUT); // Arduino RX - ATMEGA8U2 TX
-  pinMode(1,INPUT); // Arduino TX - ATMEGA8U2 RX
+  //pinMode(0,INPUT); // Arduino RX - ATMEGA8U2 TX
+  //pinMode(1,INPUT); // Arduino TX - ATMEGA8U2 RX
 
+
+  //
+
+  Serial.begin(31250);
 
 }
 
+unsigned long currentMillis =0;
 void loop() {
-  
+
+  if ( millis() > currentMillis + 5000 ) {
+      Serial.write( 0xF0 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x0B );
+      Serial.write( 0xF7 );    
+      currentMillis = millis();
+  }
+
+  while (Serial.available()) {
+    Serial.write(Serial.read());
+    currentMillis = millis();
+  }
+    
 }
 
