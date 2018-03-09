@@ -34,14 +34,14 @@ LD_FLAGS     =
 
 # ARDUINO libraries
 
-ARDUINO_PATH = /C/Arduino
-ARDUINO_CORE = $(ARDUINO_PATH)/hardware/arduino/avr
-ARDUINO_INC += "-I$(ARDUINO_CORE)/cores/arduino"
+# ARDUINO_PATH = /C/Arduino
+# ARDUINO_CORE = $(ARDUINO_PATH)/hardware/arduino/avr
+# ARDUINO_INC += "-I$(ARDUINO_CORE)/cores/arduino"
 #ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/SoftwareSerial/src"
-ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/EEPROM/src"
-ARDUINO_INC += "-I$(ARDUINO_PATH)/packages/HoodLoader2/hardware/avr/2.0.5/variants/HoodLoader2"
+# ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/EEPROM/src"
+# ARDUINO_INC += "-I$(ARDUINO_PATH)/packages/HoodLoader2/hardware/avr/2.0.5/variants/HoodLoader2"
 
-CC_FLAGS     += $(ARDUINO_INC)
+# CC_FLAGS     += $(ARDUINO_INC)
 # CC_FLAGS     += -llib/arduino/libraries/SoftwareSerial/SoftwareSerial.cpp.o
 # CC_FLAGS     += -llib/arduino/core/core.a
 # CC_FLAGS     += -llib/arduino/core/abi.cpp.o
@@ -89,9 +89,11 @@ ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 # This is used by Descriptors.c
 
 MIDI_DEVICE_VENDORID								= 0x2912
-MIDI_DEVICE_PRODUCTID 							= 0x1968
+MIDI_DEVICE_PRODUCTID 							= 0x1967
 MIDI_DEVICE_MANUFACTURER_STRING 		= "The KikGen MIDI factory"
-MIDI_DEVICE_PRODUCT_STRING 					= "USB MidiKliK $(BUILD_STRING)        "
+# The MIDI_DEVICE_PRODUCT_STRING size must not be changed as it is store in PROGMEM
+# and can be changed dynamically later...
+MIDI_DEVICE_PRODUCT_STRING 					= "USB MidiKliK $(BUILD_STRING)                       "
 
 CC_FLAGS     += -DARDUINO_DEVICE_VENDORID=$(ARDUINO_DEVICE_VENDORID)
 CC_FLAGS     += -DARDUINO_DEVICE_PRODUCTID=$(ARDUINO_DEVICE_PRODUCTID)
@@ -110,7 +112,7 @@ buildinc:
 		# Create an auto-incrementing build number.
 		@if ! test -f $(BUILD_NUMBER_FILE); then echo 0 > $(BUILD_NUMBER_FILE); fi
 		@echo $$(($$(cat $(BUILD_NUMBER_FILE)) + 1)) > $(BUILD_NUMBER_FILE)
-		make all BUILD_CFLAGS="-DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) )-DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')"\
+		make all BUILD_CFLAGS="-DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')"\
 		BUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE)) BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S') \
 		BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 # Default target

@@ -32,9 +32,13 @@
 
 	#define DEVICE_VENDORID_MIDI  MIDI_DEVICE_VENDORID
 	#define DEVICE_PRODUCTID_MIDI MIDI_DEVICE_PRODUCTID
+
 	const USB_Descriptor_String_t PROGMEM ManufacturerStringMIDI = USB_STRING_DESCRIPTOR(_utf8(MIDI_DEVICE_MANUFACTURER_STRING));
-	const USB_Descriptor_String_t PROGMEM ProductStringMIDI = USB_STRING_DESCRIPTOR(_utf8(MIDI_DEVICE_PRODUCT_STRING));
-  USB_Descriptor_String_t ProductStringMIDIAlt = USB_STRING_DESCRIPTOR(_utf8("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"));
+
+	// ProductStringMIDI is stored in EEPROM, then in the param struct to allow runtime update via SYSEX
+	// We use the default compile time size to allocate space for UnicodeString
+
+	extern USB_Descriptor_String_t * ProductStringMIDI;
 
 // MIDI DEVICE DESCRIPTOR
 

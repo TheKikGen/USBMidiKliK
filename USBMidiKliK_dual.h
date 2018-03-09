@@ -6,10 +6,16 @@
  *  Compiled against LUFA-140928
  ***********************************************************************/
 
-#ifndef _arduino_midi_h
-#define _arduino_midi_h
+#ifndef _usbmidiklik_h
+#define _usbmidiklik_h
 
-  //#define BOARD BOARD_UNO
+
+	#define USB_TO_USART_BUFF_SIZE 32
+	#define USART_TO_USB_BUFF_SIZE 16
+	#define MIDI_PRODUCT_STRING_SIZE 30
+	#define SYSEX_INTERNAL_BUFF_SIZE MIDI_PRODUCT_STRING_SIZE + 2
+
+	//#define BOARD BOARD_UNO
 
 	#include <avr/io.h>
 	#include <avr/wdt.h>
@@ -29,6 +35,8 @@
 	#include <LUFA/Drivers/Board/Board.h>
 	#include <LUFA/Drivers/Misc/RingBuffer.h>
   #include <LUFA/Drivers/USB/Class/CDCClass.h>
+	#include "EEPROM_Params.h"
+
 
 	#define LEDMASK_USB_NOTREADY      LEDS_LED1
 	#define LEDMASK_USB_ENUMERATING   LEDS_LED2
@@ -36,6 +44,7 @@
 	#define LEDMASK_USB_ERROR         LEDS_LED1
 
 	/* Function Prototypes: */
+	void CheckEEPROM(void);
 	void SetupHardware(void);
 	void EVENT_USB_Device_Connect(void);
 	void EVENT_USB_Device_Disconnect(void);

@@ -34,21 +34,24 @@ uint8_t UsbMIDITagPacket = 0x00 ;  	// Used to tag MIDI events when sending to s
 // The second byte is usually an id number or a func code + the midi channel (any here)
 // The Third the product id
 static  uint8_t sysExInternalHeader[] = { 0x77,0x77,0x77} ;
-static  uint8_t sysExInternalBuffer[32] ;
+static  uint8_t sysExInternalBuffer[SYSEX_INTERNAL_BUFF_SIZE] ;
 
 // Ring Buffers
 
-static RingBuffer_t USBtoUSART_Buffer;           // Circular buffer to hold host data
-static uint8_t      USBtoUSART_Buffer_Data[64];  // USB to USART_Buffer
-static RingBuffer_t USARTtoUSB_Buffer;           // Circular buffer to hold data from the serial port
-static uint8_t      USARTtoUSB_Buffer_Data[32];  // USART to USB_Buffer
-volatile uint8_t    rxByte;										   // Used in ISR
+static RingBuffer_t USBtoUSART_Buffer;           										// Circular buffer to hold host data
+static uint8_t      USBtoUSART_Buffer_Data[USB_TO_USART_BUFF_SIZE]; // USB to USART_Buffer
+static RingBuffer_t USARTtoUSB_Buffer;           										// Circular buffer to hold data from the serial port
+static uint8_t      USARTtoUSB_Buffer_Data[USART_TO_USB_BUFF_SIZE]; // USART to USB_Buffer
+volatile uint8_t    rxByte;										   										// Used in ISR
 
+EEPROM_Params_t  EEPROM_Params;
+
+USB_Descriptor_String_t * ProductStringMIDI;
 extern USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface;
 extern USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface;
 
-void(* SoftReset_AVR) (void) = 0; //declare reset function @ address 0
-
+// Reset macros
+#define SoftReset_AVR() GO $0000;
 #define HardReset_AVR() wdt_enable(WDTO_30MS); while(1) {}
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -58,7 +61,9 @@ void(* SoftReset_AVR) (void) = 0; //declare reset function @ address 0
 int  main(void)
 {
 
+	CheckEEPROM();
 	SetupHardware();
+
 	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 
 	if (MIDIBootMode) ProcessMidiUsbMode(); // Inifinite loop
@@ -66,6 +71,43 @@ int  main(void)
 	else ProcessSerialUsbMode();
 
 ///////////////////////////////////////////////////////////////////////////////
+}
+///////////////////////////////////////////////////////////////////////////////
+// CHECK EEPROM
+//
+// Retrieve global parameters from EEPROM, or Initalize
+//////////////////////////////////////////////////////////////////////////////
+void CheckEEPROM() {
+
+	// Read the EEPROM parameters structure
+	eeprom_read_block((void*)&EEPROM_Params, (const void*)0, sizeof(EEPROM_Params));
+
+	// If the signature is not found, of not the same version, or new build, then initialize
+	if (
+				memcmp( (const void*)&EEPROM_Params.signature,(const void*)EE_SIGNATURE,sizeof(EEPROM_Params.signature) ) ||
+			  EEPROM_Params.prmVer != EE_PRMVER ||
+				EEPROM_Params.buildNumber != BUILD_NUMBER
+		 )
+	{
+		memset( (void*)&EEPROM_Params,0,sizeof(EEPROM_Params) );
+
+		memcpy( (void*)&EEPROM_Params.signature,(const void*)EE_SIGNATURE,sizeof(EEPROM_Params.signature) );
+
+		EEPROM_Params.prmVer = EE_PRMVER;
+
+		EEPROM_Params.buildNumber = BUILD_NUMBER;
+
+		uint8_t maxSize = MIN ( sizeof(EEPROM_Params.midiProductStringDescriptor.UnicodeString), sizeof(_utf8(MIDI_DEVICE_PRODUCT_STRING)) );
+		EEPROM_Params.midiProductStringDescriptor.header.Size = sizeof(USB_Descriptor_Header_t)  + maxSize - 2;
+		EEPROM_Params.midiProductStringDescriptor.header.Type = DTYPE_String;
+		memcpy( (void*)&EEPROM_Params.midiProductStringDescriptor.UnicodeString,(const void*)_utf8(MIDI_DEVICE_PRODUCT_STRING),maxSize );
+
+		//Write the whole param struct
+		eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
+	}
+
+	ProductStringMIDI = (USB_Descriptor_String_t *) &EEPROM_Params.midiProductStringDescriptor.header;
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -664,8 +706,7 @@ static void ProcessUsbToMidi(void)
 ///////////////////////////////////////////////////////////////////////////////
 // MidiKlik SYSEX are the following
 //
-// F0 <header> 0B  < product String > F7     => Set a new product string
-
+// F0 <header> 0B  < product String 30 char max > F7     => Set a new product string
 
 static void ProcessSysExInternal() {
 
@@ -676,22 +717,40 @@ static void ProcessSysExInternal() {
 		case 0x0A:
 			HardReset_AVR();
 			break;
+
 	  case 0x0B:
-			Serial_SendByte( 0xFC );
-			break;
+			// Copy the receive message to the Product String Descriptor
+			// For MIDI protocol compatibility, and avoid a sysex encoding,
+			// We only support non accentuated ASCII characters, below 128.
+
+			if ( (msgLen-1) > MIDI_PRODUCT_STRING_SIZE  )	{
+					// Error : Product name too long
+					return;
+			}
+
+			memset( (void*)&EEPROM_Params.midiProductStringDescriptor.UnicodeString,0,
+							 sizeof(EEPROM_Params.midiProductStringDescriptor.UnicodeString) );
+
+			uint8_t i,j=0;
+			for ( i=2 ; i<= msgLen ; i++ ) {
+					if ( sysExInternalBuffer[i] < 128 ) {
+						EEPROM_Params.midiProductStringDescriptor.UnicodeString[j] = sysExInternalBuffer[i];
+						j++;
+					} else {
+						// Error : UTF8 not supported
+						return;
+					}
+			}
+
+			// Fix the header size
+			EEPROM_Params.midiProductStringDescriptor.header.Size = sizeof(USB_Descriptor_Header_t) + j*2;
+
+			//Write the whole param struct
+			eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
+
+			HardReset_AVR();
+ 			break;
 	}
-
-
-
-
-	//  RingBuffer_Insert(&USBtoUSART_Buffer, 0xF0 );
-	//  RingBuffer_Insert(&USBtoUSART_Buffer, 0x41 );
-	//  RingBuffer_Insert(&USBtoUSART_Buffer, 0x77 );
-	//  RingBuffer_Insert(&USBtoUSART_Buffer, 0x77 );
-	//  RingBuffer_Insert(&USBtoUSART_Buffer, 0x00 );
-	//  RingBuffer_Insert(&USBtoUSART_Buffer, 0xF7 );
-	//
-
 
 };
 

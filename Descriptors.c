@@ -110,18 +110,29 @@ const USB_Descriptor_String_t PROGMEM LanguageString = USB_STRING_DESCRIPTOR_ARR
  *  to the USB library. When the device receives a Get Descriptor request on the control endpoint, this function
  *  is called so that the descriptor details can be passed back and the appropriate descriptor sent back to the
  *  USB host.
- */
+ MEMSPACE_FLASH
+Indicates the requested descriptor is located in FLASH memory.
+
+MEMSPACE_EEPROM
+Indicates the requested descriptor is located in EEPROM memory.
+
+MEMSPACE_RAM
+Indicates the requested descriptor is located in RAM memory.
+*/
+
 extern bool MIDIBootMode;
 
 uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
                                     const uint16_t wIndex,
-                                    const void** const DescriptorAddress)
+                                    const void** const DescriptorAddress,
+																		uint8_t *MemoryAddressSpace)
 {
 	const uint8_t  DescriptorType   = (wValue >> 8);
 	const uint8_t  DescriptorNumber = (wValue & 0xFF);
 
 	const void* Address = NULL;
 	uint16_t    Size    = NO_DESCRIPTOR;
+  *MemoryAddressSpace = MEMSPACE_FLASH; // By default
 
 	switch (DescriptorType)
 	{
@@ -162,11 +173,16 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 					}
 					break;
 
+
 				case STRING_ID_Product:
 					if (MIDIBootMode) {
-						Address = (void*)&ProductStringMIDI;
-						Size    = pgm_read_byte(&ProductStringMIDI.Header.Size);
-					} else {
+
+						Address = (void*)ProductStringMIDI;
+						Size    = ProductStringMIDI->Header.Size;
+						*MemoryAddressSpace = MEMSPACE_RAM ;
+
+					}
+					else {
 						Address = (void*)&ProductStringCDC;
 						Size    = pgm_read_byte(&ProductStringCDC.Header.Size);
 					}
