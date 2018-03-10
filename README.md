@@ -34,7 +34,7 @@ TTL/Serial MIDI IN and MIDI OUT conversion schematics can be found easily on the
 
 The last version (V1.1) allows to change the USB device ProductStringName via a SYSEX. The new name is saved in the ATMEGA8U EEPROM, so it persists even after powering off the Arduino.   The message structure is the following :
 
-       F0 <USB MidiKlik sysex header = 0x77 0x77 0x77> <sysex function id = 0x 0b> <USB Midi Product name > F7
+       F0 <USB MidiKlik sysex header = 0x77 0x77 0x77> <sysex function id = 0x0b> <USB Midi Product name > F7
 
 Only Serial is parsed (but USB will be in a next version), so you must send the SYSEX from an Arduino sketch.  
 If you prefer to use a tool like MIDI-OX and you have MIDI IN/OUT jacks: 
@@ -51,5 +51,22 @@ The following SYSEX sent from an Arduino sketch will change the name of the MIDI
 
 The product name is limited to 30 characters max, non accentuated (ascii code between 0 and 0x7F).
 
+Example code you can use in your Arduino sketch :
 
+    // NB : Setting Product string will reboot the ATMEGA8U and the Arduino
+      
+      // Send SYSEX Message # 0B
+      Serial.write( 0xF0 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x0B );
+      
+      // Important : do not use accentuated characters to avoid 8 bits values
+      char * ProductString = "USB MIDI Demo";
 
+      for (uint8_t i=0; *(ProductString + i ) !=0 ; i++ ) {
+         Serial.write(* ( ProductString + i ) );
+      }
+      
+      Serial.write( 0xF7 );     
