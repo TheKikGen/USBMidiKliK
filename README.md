@@ -19,7 +19,7 @@ In "USB converter" MIDI mode, Serial directions are the following :
 
 If you need USB to talk with external MIDI IN/OUT (with DIN jacks), the RX/TX on the ATMEGA328P must no be crossed, as the ATMEGA8U2 TX/RX are hardwired to these RX and TX pins on the Uno board.  When PIN0 (RX on the Arduino board socket) and PIN1 (TX on the Arduino board) are configured as INPUT, external devices can talk directly with the ATMEGA8U2 managing the USB, making the Arduino UART transparent.
 
-If your project is a pure USB MIDI controller, simply setup serial to 31250 bauds in your sketch, to receive and send from/to MIDI application on the host side.  In that configuration, you can still have an external MIDI-OUT jack connected to TX
+If your project is a pure USB MIDI controller, simply setup serial to 31250 bauds in your sketch, to receive and send from/to MIDI application on the host side.  In that configuration, you can still have an external MIDI-OUT jack connected to TX, but UART RX will be dedicated to USB.  You can eventually use the SoftwareSerial library to get a MIDI IN on another pin, if your MIDI traffic is light.
 
                                                                        ATMEGA 328P 
            USB                           ATMEGA8U2                     UART ACTIVE
