@@ -17,10 +17,48 @@
   
 ************************************************************************************/
 
+void resetMidiUSB() {
+
+       Serial.begin(31250);
+
+      // Send SYSEX Message # 0A
+      Serial.write( 0xF0 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x0A );
+      Serial.write( 0xF7 );      
+
+}
+
+void setVendorProductIds(uint16_t vendorID,uint16_t productID) {
+
+      Serial.begin(31250);
+
+      // Send SYSEX Message # 0C
+      Serial.write( 0xF0 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x77 );
+      Serial.write( 0x0C );
+
+      Serial.write( (vendorID & 0xF000)  >> 12 );
+      Serial.write( (vendorID & 0x0F00)  >> 8  );
+      Serial.write( (vendorID & 0x00F0)  >> 4  );
+      Serial.write(  vendorID & 0x000F );
+
+      Serial.write( (productID & 0xF000)  >> 12 );
+      Serial.write( (productID & 0x0F00)  >> 8  );
+      Serial.write( (productID & 0x00F0)  >> 4  );
+      Serial.write(  productID & 0x000F );
+
+      Serial.write( 0xF7 );        
+      resetMidiUSB();
+}
+
 void SetProductString() {
 
-      // NB : Setting Product string will reboot the ATMEGA8U and the Arduino
-      
+      Serial.begin(31250);
       // Send SYSEX Message # 0B
       Serial.write( 0xF0 );
       Serial.write( 0x77 );
@@ -35,7 +73,8 @@ void SetProductString() {
          Serial.write(* ( ProductString + i ) );
       }
       
-      Serial.write( 0xF7 );        
+      Serial.write( 0xF7 ); 
+      resetMidiUSB();       
 }
 
 

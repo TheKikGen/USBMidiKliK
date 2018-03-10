@@ -29,16 +29,14 @@
 */
 
 // MIDI USB INTERFACE
+#include "EEPROM_Params.h"
 
-	#define DEVICE_VENDORID_MIDI  MIDI_DEVICE_VENDORID
-	#define DEVICE_PRODUCTID_MIDI MIDI_DEVICE_PRODUCTID
+const USB_Descriptor_String_t PROGMEM ManufacturerStringMIDI = USB_STRING_DESCRIPTOR(_utf8(MIDI_DEVICE_MANUFACTURER_STRING));
 
-	const USB_Descriptor_String_t PROGMEM ManufacturerStringMIDI = USB_STRING_DESCRIPTOR(_utf8(MIDI_DEVICE_MANUFACTURER_STRING));
+// ProductStringMIDI is stored in EEPROM, then in the param struct to allow runtime update via SYSEX
+// We use the default compile time size to allocate space for UnicodeString
 
-	// ProductStringMIDI is stored in EEPROM, then in the param struct to allow runtime update via SYSEX
-	// We use the default compile time size to allocate space for UnicodeString
-
-	extern USB_Descriptor_String_t * ProductStringMIDI;
+extern USB_Descriptor_String_t * ProductStringMIDI;
 
 // MIDI DEVICE DESCRIPTOR
 
@@ -48,7 +46,7 @@
  *  process begins.
  */
 
-const USB_Descriptor_Device_t PROGMEM DeviceDescriptorMIDI =  // MIDI
+USB_Descriptor_Device_t DeviceDescriptorMIDI =  // MIDI
 {
 	.Header                 = {.Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device},
 

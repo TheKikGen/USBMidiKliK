@@ -49,6 +49,7 @@ EEPROM_Params_t  EEPROM_Params;
 USB_Descriptor_String_t * ProductStringMIDI;
 extern USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface;
 extern USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface;
+extern USB_Descriptor_Device_t DeviceDescriptorMIDI;
 
 // Reset macros
 #define SoftReset_AVR() GO $0000;
@@ -97,6 +98,9 @@ void CheckEEPROM() {
 
 		EEPROM_Params.buildNumber = BUILD_NUMBER;
 
+		EEPROM_Params.vendorID  = DEVICE_VENDORID_MIDI;
+		EEPROM_Params.productID = DEVICE_PRODUCTID_MIDI;
+
 		uint8_t maxSize = MIN ( sizeof(EEPROM_Params.midiProductStringDescriptor.UnicodeString), sizeof(_utf8(MIDI_DEVICE_PRODUCT_STRING)) );
 		EEPROM_Params.midiProductStringDescriptor.header.Size = sizeof(USB_Descriptor_Header_t)  + maxSize - 2;
 		EEPROM_Params.midiProductStringDescriptor.header.Type = DTYPE_String;
@@ -105,7 +109,8 @@ void CheckEEPROM() {
 		//Write the whole param struct
 		eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
 	}
-
+	DeviceDescriptorMIDI.VendorID = EEPROM_Params.vendorID;
+	DeviceDescriptorMIDI.ProductID = EEPROM_Params.productID;
 	ProductStringMIDI = (USB_Descriptor_String_t *) &EEPROM_Params.midiProductStringDescriptor.header;
 
 }
@@ -704,21 +709,43 @@ static void ProcessUsbToMidi(void)
 ///////////////////////////////////////////////////////////////////////////////
 // Process internal USBMidiKlik SYSEX
 ///////////////////////////////////////////////////////////////////////////////
-// MidiKlik SYSEX are the following
+// MidiKlik SYSEX are of the following form :
 //
-// F0 <header> 0B  < product String 30 char max > F7     => Set a new product string
-
+// F0            SOX Start Of Sysex
+// 77 77 77      USBMIDIKliK header
+// <xx>          USBMIDIKliK sysex command
+// <dddddd...dd> data
+// F7            EOX End of SYSEX
+//
+// SOX, Header and EOX are not stored in sysExInternalBuffer.
+//
+// Cmd Description                           Data
+//
+// 0xA Hard reset interface
+// 0xB Set a new product string		< product String 30 x7 bits char max >
+// 0xC Set VendorID & ProductID   <n1n2n3n4=VendorId > <n1n2n3n4=ProductId>
+// ----------------------------------------------------------------------------
+// sysExInternalBuffer[0] length of the message (func code + data)
+// sysExInternalBuffer[1] function code
+// sysExInternalBuffer[2] data without EOX
+///////////////////////////////////////////////////////////////////////////////
 static void ProcessSysExInternal() {
 
 	uint8_t msgLen = sysExInternalBuffer[0];
-	uint8_t msgId  = sysExInternalBuffer[1];
+	uint8_t cmdId  = sysExInternalBuffer[1];
+	uint8_t i,j;
 
-	switch (msgId) {
+	switch (cmdId) {
+
+		// RESET USB MIDI INTERFACE
+		// F0 77 77 77 0A F7
 		case 0x0A:
 			HardReset_AVR();
 			break;
 
-	  case 0x0B:
+		// CHANGE MIDI PRODUCT STRING
+		// F0 77 77 77 0B <character array> F7
+		case 0x0B:
 			// Copy the receive message to the Product String Descriptor
 			// For MIDI protocol compatibility, and avoid a sysex encoding,
 			// We only support non accentuated ASCII characters, below 128.
@@ -731,7 +758,7 @@ static void ProcessSysExInternal() {
 			memset( (void*)&EEPROM_Params.midiProductStringDescriptor.UnicodeString,0,
 							 sizeof(EEPROM_Params.midiProductStringDescriptor.UnicodeString) );
 
-			uint8_t i,j=0;
+			j=0;
 			for ( i=2 ; i<= msgLen ; i++ ) {
 					if ( sysExInternalBuffer[i] < 128 ) {
 						EEPROM_Params.midiProductStringDescriptor.UnicodeString[j] = sysExInternalBuffer[i];
@@ -745,11 +772,34 @@ static void ProcessSysExInternal() {
 			// Fix the header size
 			EEPROM_Params.midiProductStringDescriptor.header.Size = sizeof(USB_Descriptor_Header_t) + j*2;
 
-			//Write the whole param struct
+			// Write the whole param struct
 			eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
 
-			HardReset_AVR();
  			break;
+
+		// VENDOR ID & PRODUCT ID
+		// F0 77 77 77 0C <n1 n2 n3 n4 = Vendor Id nibbles> <n1 n2 n3 n4 = Product Id nibbles> F7
+		case 0x0C:
+				// As MIDI data are 7 bits bytes, we must use a special encoding, to encode 8 bits values,
+				// as light as possible. As we have here only 2 x 16 bits values to handle,
+				// the encoding will consists in sending each nibble (4 bits) serialized in bytes.
+				// For example sending VendorID and ProductID 0X8F12 0X9067 will be encoded as :
+				//   0x08 0XF 0x1 0x2  0X9 0X0 0X6 0X7,  so the complete SYSEX message will be :
+				// F0 77 77 77 0C 08 0F 01 02 09 00 06 07 F7
+
+				if ( msgLen != 9 ) return;
+
+
+				EEPROM_Params.vendorID = (sysExInternalBuffer[2] << 12) + (sysExInternalBuffer[3] << 8) +
+				                               (sysExInternalBuffer[4] << 4) + sysExInternalBuffer[5] ;
+
+				EEPROM_Params.productID= (sysExInternalBuffer[6] << 12) + (sysExInternalBuffer[7] << 8) +
+				                               (sysExInternalBuffer[8] << 4) + sysExInternalBuffer[9] ;
+
+ 			  // Write the whole param struct
+				eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
+
+				break;
 	}
 
 };

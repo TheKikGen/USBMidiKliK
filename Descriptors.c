@@ -36,8 +36,8 @@
  */
 
 #include "Descriptors.h"
+
 // Only one MIDI device below
-//#include "Descriptor_MIDI_KloK.c"
 #include "Descriptor_MIDI.c"
 
 #include "Descriptor_CDC_ArduinoUno.c"
@@ -137,10 +137,13 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 	switch (DescriptorType)
 	{
 		case DTYPE_Device:
-			if (MIDIBootMode) 			Address = (void*)&DeviceDescriptorMIDI;
+			if (MIDIBootMode) {
+				Address = (void*)&DeviceDescriptorMIDI;
+				*MemoryAddressSpace = MEMSPACE_RAM ;
+			}
 			else 			Address = (void*)&DeviceDescriptorCDC;
-
 			Size    = sizeof(USB_Descriptor_Device_t);
+
 			break;
 
 		case DTYPE_Configuration:
