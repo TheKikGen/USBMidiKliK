@@ -1,20 +1,32 @@
 # USBMidiKliK
 A robust USB MIDI Arduino firmware, with a dual bootloader, based on the last version of the LUFA library.
 
-As other project, like HIDUINO, or MOCOLUFA (thanks to them for inspiration), USBMIDIKLIK allows your Arduino board to become a very reliable MIDI IN/OUT USB interface.  
+As other project, like HIDUINO, or MOCOLUFA (thanks to them for inspiration), USBMIDIKLIK allows your Arduino board to become a very reliable MIDI IN/OUT USB interface.  Despite the very good work done on these projects, i was facing some issues...
+An heavy MIDI traffic was blocking the serial, and some MIDI messages were purely ignored by the parser, like the song pointer position for example... more, these projects rely on a quite old version of the LUFA library.
 
-The USBMIDIKLIK firmware is uploaded in the ATMEGA8U2 chip managing the USB, and changes the default USB serial descriptors to the MIDI ones. 
+USBMidiKliK uses interrupts and ring buffers to ensure that (fast) USB to (slow) midi transfers are reliable, plus a "more transparent as possible" midi parser. MIDI product device name is integrated in the makefile, and can also be modified by sysex...so easy to change.
 
-For more convenience when updates are needed, a "dual mode" is embedded, allowing to switch back to the USB serial : when the PB2/MOSI pin of the ATMEGA8U2 is connected to ground, the Arduino is a classical one again, and you can change and upload a new firmware in the ATMEGA328P (UNO) with the standard IDE.
+This firmware is uploaded in the ATMEGA8U2 chip managing the USB, and changes the default USB serial descriptors to the MIDI ones. 
+For more convenience when updates are needed, a "dual mode" is embedded, allowing to switch back to the USB serial : when the PB2/MOSI pin of the ATMEGA8U2 is connected to ground, the Arduino is a classical one again, and you can change and upload a new firmware in the ATMEGA328P (UNO) with the standard Arduino IDE.
 
-In MIDI mode, Serial directions are the following :
+In "USB converter" MIDI mode, Serial directions are the following :
 
-       USB                             ATMEGA8U2                           ATMEGA 328P
+                                                                            ATMEGA 328P 
+           USB                          ATMEGA8U2                        UART NOT ACTIVE
        -------------         ------------------------------          ------------------------
        IN Endpoint  o<-----o | USBOUT  (usbMidiKliK )  RX | o<-----o |  (TX) pinMode(INPUT) | o<-----  MIDI IN
        OUT Endpoint o----->o | USBIN   ( firmware   )  TX | o----->o |  (RX) pinMode(INPUT) | o----->  MIDI OUT   
 
-If you need to use external MIDI IN/OUT (with DIN jacks), the RX/TX on the ATMEGA328P must no be crossed, as the ATMEGA8U2 is directly connected to the RX and TX pins.  When PIN0 (RX on the Arduino board) and PIN1 (TX on the Arduino board) are configured as INPUT, we can talk directly with the ATMEGA8U2 managing the USB, making the Arduino transparent.
+If you need USB to talk with external MIDI IN/OUT (with DIN jacks), the RX/TX on the ATMEGA328P must no be crossed, as the ATMEGA8U2 TX/RX are hardwired to these RX and TX pins on the Uno board.  When PIN0 (RX on the Arduino board socket) and PIN1 (TX on the Arduino board) are configured as INPUT, external devices can talk directly with the ATMEGA8U2 managing the USB, making the Arduino UART transparent.
+
+If your project is a pure USB MIDI controller, simply setup serial to 31250 bauds in your sketch, to receive and send from/to MIDI application on the host side.  In that configuration, you can still have an external MIDI-OUT jack connected to TX
+
+                                                                        ATMEGA 328P 
+           USB                           ATMEGA8U2                    UART NOT ACTIVE
+       -------------         ------------------------------          --------------
+       IN Endpoint  o<-----o | USBOUT  (usbMidiKliK )  RX | o<-----o |     (TX)   | o----->  MIDI OUT   
+       OUT Endpoint o----->o | USBIN   ( firmware   )  TX | o----->o |     (RX)   | X NOT POSSIBLE <-----  MIDI IN
+
 
 TTL/Serial MIDI IN and MIDI OUT conversion schematics can be found easily on the web.
   
