@@ -18,16 +18,26 @@ If you need to use external MIDI IN/OUT (with DIN jacks), the RX/TX on the ATMEG
 
 TTL/Serial MIDI IN and MIDI OUT conversion schematics can be found easily on the web.
   
-## Changing the name of the device with USB MIDIKLIK internal SYSEX
+## Changing the device ProductStringName with a USB MIDIKLIK internal SYSEX
 
-The last version (V1.1) allows to change the USB product device name via SYSEX. It is saved in the ATMEGEA8U EEPROM, so it persists even after powering off the Arduino.  
-
-The message structure is the following :
+The last version (V1.1) allows to change the USB device ProductStringName via a SYSEX. The new name is saved in the ATMEGEA8U EEPROM, so it persists even after powering off the Arduino.   The message structure is the following :
 
        F0 <USB MidiKlik sysex header = 0x77 0x77 0x77> <sysex function id = 0x 0b> <USB Midi Product name > F7
+
+Only Serial is parsed (but USB will be in a next version), so you must send the SYSEX from an Arduino sketch.  
+If you prefer to use a tool like MIDI-OX and you have MIDI IN/OUT jacks: 
+- connect the Arduino board with the USBMidiKliK firmware to USB (default MIDI mode)
+- connect the MIDIOUT JACK to the MIDI IN JACK
+- Open MIDI-OX and connect the USBMidiKliK in the MIDI output device dialog box
+- Open the SysEx windows in the "View" menu
+- Enter the SYSEX msg in the command window and click on "Send Sysex" in the "CommandWindow" menu.  The Uno Board will reboot if the command was correctly received.
+- Quit and reopen MIDI-OX and you should see a new name in the MIDI devices dialog box.
 
 The following SYSEX sent from an Arduino sketch will change the name of the MIDI interface to "USB MidiKliK" :
 
        F0 77 77 77 0B 55 53 42 20 4D 69 64 69 4B 6C 69 4B F7
 
 The product name is limited to 30 characters max, non accentuated (ascii code between 0 and 0x7F).
+
+
+
