@@ -20,7 +20,7 @@ TTL/Serial MIDI IN and MIDI OUT conversion schematics can be found easily on the
   
 ## Changing the device ProductStringName with a USB MIDIKLIK internal SYSEX
 
-The last version (V1.1) allows to change the USB device ProductStringName via a SYSEX. The new name is saved in the ATMEGEA8U EEPROM, so it persists even after powering off the Arduino.   The message structure is the following :
+The last version (V1.1) allows to change the USB device ProductStringName via a SYSEX. The new name is saved in the ATMEGA8U EEPROM, so it persists even after powering off the Arduino.   The message structure is the following :
 
        F0 <USB MidiKlik sysex header = 0x77 0x77 0x77> <sysex function id = 0x 0b> <USB Midi Product name > F7
 
