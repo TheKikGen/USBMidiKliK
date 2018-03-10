@@ -21,8 +21,8 @@ If you need USB to talk with external MIDI IN/OUT (with DIN jacks), the RX/TX on
 
 If your project is a pure USB MIDI controller, simply setup serial to 31250 bauds in your sketch, to receive and send from/to MIDI application on the host side.  In that configuration, you can still have an external MIDI-OUT jack connected to TX
 
-                                                                        ATMEGA 328P 
-           USB                           ATMEGA8U2                    UART NOT ACTIVE
+                                                                       ATMEGA 328P 
+           USB                           ATMEGA8U2                     UART ACTIVE
        -------------         ------------------------------          --------------
        IN Endpoint  o<-----o | USBOUT  (usbMidiKliK )  RX | o<-----o |     (TX)   | o----->  MIDI OUT   
        OUT Endpoint o----->o | USBIN   ( firmware   )  TX | o----->o |     (RX)   | X NOT POSSIBLE <-----  MIDI IN
