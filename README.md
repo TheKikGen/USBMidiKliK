@@ -42,7 +42,8 @@ If you prefer to use a tool like MIDI-OX and you have MIDI IN/OUT jacks:
 - connect the MIDIOUT JACK to the MIDI IN JACK
 - Open MIDI-OX and connect the USBMidiKliK in the MIDI output device dialog box
 - Open the SysEx windows in the "View" menu
-- Enter the SYSEX msg in the command window and click on "Send Sysex" in the "CommandWindow" menu.  The Uno Board will reboot if the command was correctly received.
+- Enter the SYSEX msg in the command window and click on "Send Sysex" in the "CommandWindow" menu.  
+- Unplug/plug the USB cable or send a Midi USB HardReset sysex (see below)
 - Quit and reopen MIDI-OX and you should see a new name in the MIDI devices dialog box.
 
 The following SYSEX sent from an Arduino sketch will change the name of the MIDI interface to "USB MidiKliK" :
@@ -70,3 +71,58 @@ Example code you can use in your Arduino sketch :
       }
       
       Serial.write( 0xF7 );     
+
+## Changing the USB VendorID and ProductID with a USB MIDIKLIK internal SYSEX
+
+In the same way, you can also change the USB Vendor and Product Ids with a SYSEX. They are also saved in the ATMEGA8U EEPROM after an update and persist after power off. The sysex message structure is the following :
+
+    F0 77 77 77 <func id = 0x0C> <n1n2n3n4 = Vendor Id nibbles> <n1n2n3n4 = Product Id nibbles> F7
+
+As MIDI data are 7 bits bytes, we must use a special encoding, to handle VendorId and ProductID beeing 16 bits values.  To stay light, and because the message is very short, 2 x 16 bits values, the encoding will consists in sending each nibble (4 bits) serialized in a bytes train. For example sending VendorID and ProductID 0X8F12 0X9067 will be encoded as :
+			
+      0x08 0XF 0x1 0x2  0X9 0X0 0X6 0X7
+
+so the complete SYSEX message will be :
+
+      F0 77 77 77 0C 08 0F 01 02 09 00 06 07 F7
+
+Example of an Arduino code you can use in a sketch :
+
+          void setVendorProductIds(uint16_t vendorID,uint16_t productID) {
+
+                Serial.begin(31250);
+
+                // Send SYSEX Message # 0C
+                Serial.write( 0xF0 );
+                Serial.write( 0x77 );
+                Serial.write( 0x77 );
+                Serial.write( 0x77 );
+                Serial.write( 0x0C );
+
+                Serial.write( (vendorID & 0xF000)  >> 12 );
+                Serial.write( (vendorID & 0x0F00)  >> 8  );
+                Serial.write( (vendorID & 0x00F0)  >> 4  );
+                Serial.write(  vendorID & 0x000F );
+
+                Serial.write( (productID & 0xF000)  >> 12 );
+                Serial.write( (productID & 0x0F00)  >> 8  );
+                Serial.write( (productID & 0x00F0)  >> 4  );
+                Serial.write(  productID & 0x000F );
+
+                Serial.write( 0xF7 );        
+                resetMidiUSB();
+          }
+
+## USB Midi hard reset with a USB MIDIKLIK internal SYSEX
+
+To avoid unplugging the USB cable, you cand send this sysex that will do an harware reset programatically.  The full Arduino board will be resetted (ATMEGA8U2 USBMidiKliK firmware + ATMEGA328P and sketch firmware).
+The sysex message structure is the following :
+
+       F0 77 77 77 <sysex function id = 0x0A> F7
+
+For example to set ProductString, VendorID, Product ID and restart the USB Midi interface with new data, send the following sysex : 
+
+      F0 77 77 77 0B 55 53 42 20 4D 69 64 69 4B 6C 69 4B F7
+      F0 77 77 77 0C 08 0F 01 02 09 00 06 07 F7
+      F0 77 77 77 0A F7
+
