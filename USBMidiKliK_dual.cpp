@@ -24,23 +24,28 @@ uint16_t tx_ticks = 0;
 uint16_t rx_ticks = 0;
 const uint16_t TICK_COUNT = 3000;
 
+// To manage the dual boot
 bool MIDIBootMode  = false;
-bool MIDISerialRxParse = true ; 	  // Use 1 byte packet to USB without parsing if false
-uint8_t UsbMIDITagPacket = 0x00 ;  	// Used to tag MIDI events when sending to serial if
-																		// required. So it is possible to get CN
 
-// Use to set some parameters of the interface.
+// Use 1 byte packet to USB without parsing if false
+bool MIDISerialRxParse = true ;
+
+// Used to tag MIDI events when sending to serial if
+// required. So it is possible to get CN
+uint8_t UsbMIDITagPacket = 0x00 ;
+
+// Sysex used to set some parameters of the interface.
 // Be aware that the 0x77 manufacturer id is reserved in the MIDI standard (but not used)
 // The second byte is usually an id number or a func code + the midi channel (any here)
-// The Third the product id
+// The Third is the product id
 static  uint8_t sysExInternalHeader[] = { 0x77,0x77,0x77} ;
 static  uint8_t sysExInternalBuffer[SYSEX_INTERNAL_BUFF_SIZE] ;
 
 // Ring Buffers
 
-static RingBuffer_t USBtoUSART_Buffer;           										// Circular buffer to hold host data
+static RingBuffer_t USBtoUSART_Buffer; 															// Circular buffer to hold host data
 static uint8_t      USBtoUSART_Buffer_Data[USB_TO_USART_BUFF_SIZE]; // USB to USART_Buffer
-static RingBuffer_t USARTtoUSB_Buffer;           										// Circular buffer to hold data from the serial port
+static RingBuffer_t USARTtoUSB_Buffer;															// Circular buffer to hold data from the serial port
 static uint8_t      USARTtoUSB_Buffer_Data[USART_TO_USB_BUFF_SIZE]; // USART to USB_Buffer
 volatile uint8_t    rxByte;										   										// Used in ISR
 
@@ -58,7 +63,6 @@ extern USB_Descriptor_Device_t DeviceDescriptorMIDI;
 ///////////////////////////////////////////////////////////////////////////////
 // MAIN START HERE
 ///////////////////////////////////////////////////////////////////////////////
-
 int  main(void)
 {
 
@@ -71,12 +75,11 @@ int  main(void)
 
 	else ProcessSerialUsbMode();
 
-///////////////////////////////////////////////////////////////////////////////
 }
 ///////////////////////////////////////////////////////////////////////////////
 // CHECK EEPROM
-//
-// Retrieve global parameters from EEPROM, or Initalize
+//----------------------------------------------------------------------------
+// Retrieve global parameters from EEPROM, or Initalize it
 //////////////////////////////////////////////////////////////////////////////
 void CheckEEPROM() {
 
@@ -117,7 +120,7 @@ void CheckEEPROM() {
 
 ///////////////////////////////////////////////////////////////////////////////
 // SETUP HARWARE WITH DUAL BOOT SERIAL / MIDI
-//
+//----------------------------------------------------------------------------
 // WHEN PB2 IS GROUNDED during reset, this allows to reflash the MIDI application
 // firmware with the standard Arduino IDE without reflashing the usbserial bootloader.
 //
@@ -126,7 +129,6 @@ void CheckEEPROM() {
 //
 // Note : When PB3 is grounded, this allows the No midi serial RX parsing
 ///////////////////////////////////////////////////////////////////////////////
-
 void SetupHardware(void)
 {
 #if (ARCH == ARCH_AVR8)
@@ -266,13 +268,11 @@ void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCI
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// INFINITE LOOP FOR USB SERIAL PROCESSING
+// ----------------------------------------------------------------------------
 // Serial Worker Functions
 // Used when Arduino is in USB Serial mode.
 ///////////////////////////////////////////////////////////////////////////////
-
-// ----------------------------------------------------------------------------
-// INFINITE LOOP FOR USB SERIAL PROCESSING
-// ----------------------------------------------------------------------------
 static void ProcessSerialUsbMode(void) {
 
 		RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
@@ -324,13 +324,11 @@ static void ProcessSerialUsbMode(void) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// INFINITE LOOP FOR USB MIDI AND SERIAL MIDI PROCESSING
+// ----------------------------------------------------------------------------
 // MIDI Worker Functions
 // Used when Arduino is in USB MIDI mode (default mode).
 ///////////////////////////////////////////////////////////////////////////////
-
-// ----------------------------------------------------------------------------
-// INFINITE LOOP FOR USB MIDI AND SERIAL MIDI PROCESSING
-// ----------------------------------------------------------------------------
 static void ProcessMidiUsbMode(void) {
 
 	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
@@ -690,7 +688,7 @@ static void ProcessUsbToMidi(void)
 	}
 
 	// Do not read the USB Midi command if not enough room in the USART buffer
-	// 4 bytes for an USB Midi event
+	// 3 bytes for an USB Midi event
 	if ( RingBuffer_GetFreeCount(&USBtoUSART_Buffer) < 4 ) return;
 
 	/* Check if a MIDI command has been received */
@@ -708,7 +706,7 @@ static void ProcessUsbToMidi(void)
 
 ///////////////////////////////////////////////////////////////////////////////
 // Process internal USBMidiKlik SYSEX
-///////////////////////////////////////////////////////////////////////////////
+// ----------------------------------------------------------------------------
 // MidiKlik SYSEX are of the following form :
 //
 // F0            SOX Start Of Sysex
