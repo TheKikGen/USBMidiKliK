@@ -597,7 +597,7 @@ static bool ProcessMidiToUsb()
 
 	// Tune Request
 	if ( receivedByte == 0xF6 ) {
-       MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
+       MIDIEvent.Event    = 0x5; // single-byte system common message
 			 nextMidiMsgLength 	= 1;
 			 dataBufferIndex 		= 0;
   } else
