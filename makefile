@@ -18,7 +18,7 @@ F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
 TARGET       = USBMidiKliK_dual
-SRC          = 	$(TARGET).cpp Descriptors.c
+SRC          = 	$(TARGET).cpp Descriptors.c midiXparser.cpp
 SRC          += $(LUFA_SRC_USB)
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
@@ -29,7 +29,7 @@ SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
 LUFA_PATH    = ../../LUFA
 
-CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
+CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -std=gnu++11
 LD_FLAGS     =
 
 # ARDUINO libraries

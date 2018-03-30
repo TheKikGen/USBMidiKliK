@@ -20,6 +20,7 @@
 
 #include "USBMidiKliK_dual.h"
 
+
 uint16_t tx_ticks = 0;
 uint16_t rx_ticks = 0;
 const uint16_t TICK_COUNT = 3000;
@@ -27,8 +28,8 @@ const uint16_t TICK_COUNT = 3000;
 // To manage the dual boot
 bool MIDIBootMode  = false;
 
-// Use 1 byte packet to USB without parsing if false
-bool MIDISerialRxParse = true ;
+// Midi serial parser
+midiXparser midiSerial;
 
 // Used to tag MIDI events when sending to serial if
 // required. So it is possible to get CN
@@ -144,16 +145,18 @@ void SetupHardware(void)
 	// Pins assignments :
 	// PB1 = LED
 	// PB2 = MIDI / Arduino SERIAL when grounded
-	// PB3 = No RX serial parsing when grounded
 
   DDRB  = 0x02;		// SET PB1 as OUTPUT and PB2/PB3 as INPUT
   PORTB = 0x0C;		// PULL-UP PB2/PB3
 
 	MIDIBootMode  		= ( (PINB & 0x04) == 0 ) ? false : true;
-	MIDISerialRxParse = ( (PINB & 0x08) == 0 ) ? false : true;
 
-  if (MIDIBootMode)
+  if (MIDIBootMode) {
 		Serial_Init(31250, false);
+		midiSerial.setMidiChannelFilter(midiXparser::allChannel);
+		midiSerial.setMidiMsgFilter( midiXparser::allMidiMsg );
+		midiSerial.setSysExFilter(true,0); // Sysex on the fly
+	}
 	else
 		Serial_Init(9600, false);
 
@@ -359,63 +362,12 @@ static void ProcessMidiUsbMode(void) {
 }
 
 // ----------------------------------------------------------------------------
-// MIDI USB  - Table 4-1: Code IndexNumber Classifications of MIDI10.PDF
-// ----------------------------------------------------------------------------
-/*
- The first byte in each 32-bit USB-MIDI Event Packet is a Packet Header
- contains a Cable Number (4 bits) followed by a Code Index Number (4 bits).
- The remaining threebytes contain the actual MIDI event.
- Most typical parsed MIDI events are two or threebytes in length.
-
- The Cable Number (C N) is a value ranging from 0x0 to 0xF indicating the number
- assignment of the Embedded MIDI Jack associated with the endpoint that is
- transferring the data.
- The Code Index Number (CIN) indicates the classification of the bytes in
- the MIDI_x fields. The following table summarizes these classifications.
-
-Note-on message on virtual cable 1 (CN=0x1; CIN=0x9) 		9n kk vv 19 9n kk vv
-Control change message on cable 10 (CN=0xA; CIN=0xB) 		Bn pp vv AB Bn pp vv
-Real-time message F8 on cable 3 (CN=0x3; CIN=0xF) 			F8 xx xx 3F F8 xx xx
-
-(Table 4-1: Code IndexNumber Classifications of MIDI10.PDF)                */
-static const int BytesIn_USB_MIDI_Command[] =
-{
-	 0,	/* 0 - function codes (reserved) */
-	 0,	/* 1 - cable events (reserved) */
-	 2,	/* 2 - two-byte system common message */
-	 3,	/* 3 - three-byte system common message */
-	 3,	/* 4 - sysex starts or continues */
-	 1,	/* 5 - sysex ends with one byte, or single-byte system common message */
-	 2,	/* 6 - sysex ends with two bytes */
-	 3,	/* 7 - sysex ends with three bytes */
-	 3,	/* 8 - note-off */
-	 3,	/* 9 - note-on */
-	 3,	/* A - poly-keypress */
-	 3,	/* B - control change */
-	 2,	/* C - program change */
-	 2,	/* D - channel pressure */
-	 3,	/* E - pitch bend change */
-	 1,	/* F - single byte */
- };
-
-// ----------------------------------------------------------------------------
 // MIDI PARSER
 // Check whether we've received any MIDI data from the USART, and if it's
 // complete send it over USB. return true if a packet was sent
 // ----------------------------------------------------------------------------
 static bool ProcessMidiToUsb()
 {
-  static  MIDI_EventPacket_t MIDIEvent;
-  MIDI_EventPacket_t         xMIDIEvent;  // Event to process specific cases like RT
-
-  static  bool sysExMode               = false;	 // True if SYSEX active
-	static  bool sysExInternal 				   = false;  // True if internal SYSEX
-
-	static  uint8_t sysExInternalMsgIdx = 0 ;			// internal Sysex msg index
-  static  uint8_t dataBufferIndex   	= 0;			// Index on Data1 to Data3
-  static  uint8_t nextMidiMsgLength 	= 0;			// Len of the midi message to be processed
-  static  uint8_t runningStatus 			= 0;			// Used for running status
-
 
   if (USB_DeviceState != DEVICE_STATE_Configured) return false;
 
@@ -424,242 +376,149 @@ static bool ProcessMidiToUsb()
 
 	uint8_t receivedByte = RingBuffer_Remove(&USARTtoUSB_Buffer) ;
 
-// Does the parsing is required ?
-// As explained in section 4, page 17, note 2, of MIDI10 (Universal Serial
-// Bus Device Class Definition - Release 1.0 Nov1, 1999), it is possible to
-// send packets without parsing anything. This is perfectly MIDI compliant :
-// "CIN=0xF, Single Byte: in some special cases, an application may prefer not
-// to use parsed MIDI events. Using CIN=0xF, a MIDI data stream may be
-// transferred by placing each individual byte in one 32 Bit USB-MIDI Event
-// Packet. This way, any MIDI data may be transferred without being parsed."
-//
-// HOWEVER  : it will not work with most of USB MIDI drivers and midi apps.
-// So, better to use that for debuging purpose.
-
-	if (  ! MIDISerialRxParse ) {
-			 MIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
-			 MIDIEvent.Data1    = receivedByte;
-			 // Send immediatly
-			 MIDI_SendEventPacket(&MIDIEvent,1);
-			 return true;
+	if ( midiSerial.parse( receivedByte)) {
+						sendMidiSerialMsgToUsb( &midiSerial );
+	}
+	else
+	// Check if a SYSEX msg is currently sent or terminated
+	// as we proceed on the fly.
+	if ( midiSerial.isByteCaptured() &&
+				( midiSerial.isSysExMode() ||
+					midiSerial.getByte() == midiXparser::eoxStatus ||
+					midiSerial.isSysExError()  ) )
+	{
+					// Process for eventual SYSEX unbuffered on the fly
+					scanMidiSerialSysExToUsb(&midiSerial) ;
 	}
 
-////////////////////// SYSTEM COMMON MESSAGES ///////////////////////////////
+}
 
-////////////////////////////////////////////////
-// REAL TIME MESSAGES
-// 11111000= F8= 248 Timing clock  none  none
-// 11111001= F9= 249 Undefined (Reserved)  --- ---
-// 11111010= FA= 250 Start none  none
-// 11111011= FB= 251 Continue  none  none
-// 11111100= FC= 252 Stop  none  none
-// 11111101= FD= 253 Undefined (Reserved)  --- ---
-// 11111110= FE= 254 Active Sensing  none  none
-// 11111111= FF= 255 System Reset  none  none
+///////////////////////////////////////////////////////////////////////////////
+// Send a serial midi msg to the USB midi
+///////////////////////////////////////////////////////////////////////////////
+void sendMidiSerialMsgToUsb( midiXparser* serialMidiParser ) {
 
-	if ( receivedByte >= 0xF8 ) {
-			 // Do not use current event struct , making real time transparent, notably
-			 // when in SYSEX mode
-       xMIDIEvent.Event    = 0xF; /* F - single byte (after the event) / Cable number 0*/
-       xMIDIEvent.Data1    = receivedByte;
-			 // Send immediatly
-       MIDI_SendEventPacket(&xMIDIEvent,1);
-       return true;
+		MIDI_EventPacket_t MIDIEvent;
+
+		uint8_t msgLen = serialMidiParser->getMidiMsgLen();
+		uint8_t msgType = serialMidiParser->getMidiMsgType();
+
+		memset(&MIDIEvent,0,4 );
+		memcpy(&MIDIEvent.Data1,&(serialMidiParser->getMidiMsg()[0]),msgLen);
+
+		// Real time single byte message CIN F->
+		if ( msgType == midiXparser::realTimeMsgType ) MIDIEvent.Event = 0xF;
+		else
+
+		// Channel voice message CIN A-E
+		if ( msgType == midiXparser::channelVoiceMsgType )
+				MIDIEvent.Event  = ( (serialMidiParser->getMidiMsg()[0]) >> 4);
+
+		else
+
+		// System common message CIN 2-3
+		if ( msgType == midiXparser::systemCommonMsgType ) {
+
+				// 5 -  single-byte system common message (Tune request is the only case)
+				if ( msgLen == 1 ) MIDIEvent.Event = 5;
+
+				// 2/3 - two/three bytes system common message
+				else MIDIEvent.Event = msgLen;
+		}
+
+		else return; // We should never be here !
+
+		MIDI_SendEventPacket(&MIDIEvent);
+
+}
+//////////////////////////////////////////////////////////////////////////////
+// Scan and parse sysex flows
+// ----------------------------------------------------------------------------
+// We use the midiXparser 'on the fly' mode, allowing to tag bytes as "captured"
+// when they belong to a midi SYSEX message, without storing them in a buffer.
+// SYSEX Error (not correctly terminated by 0xF7 for example) are cleaned up,
+// to restore a correct parsing state.
+///////////////////////////////////////////////////////////////////////////////
+
+void scanMidiSerialSysExToUsb( midiXparser* serialMidiParser ) {
+
+  static  MIDI_EventPacket_t MIDIEvent = {
+		.Event = 0, .Data1 = 0 , .Data2 = 0, .Data3 = 0
+	};
+  static uint8_t 	packetLen = 0 ;
+	static unsigned sysExInternalMsgIdx = 0;
+	static bool 		sysExInternalHeaderFound = false;
+
+  byte readByte = serialMidiParser->getByte();
+
+  // Normal End of SysEx or : End of SysEx with error.
+  // Force clean end of SYSEX as the midi usb driver
+  // will not understand if we send the packet as is
+  if ( readByte == midiXparser::eoxStatus || serialMidiParser->isSysExError() ) {
+      // Force the eox byte in case we have a SYSEX error.
+      packetLen++;
+      MIDIEvent.Data1 = midiXparser::eoxStatus;
+      // CIN = 5/6/7  sysex ends with one/two/three bytes,
+      MIDIEvent.Event =  (packetLen + 4) ;
+			MIDI_SendEventPacket(&MIDIEvent);
+			packetLen = 0;
+			memset(&MIDIEvent,0,4);
+
+			// Internal SYSEX to manage ?
+      if ( sysExInternalHeaderFound  && sysExInternalBuffer[0] > 0   ) {
+        // Process internal Sysex
+        ProcessSysExInternal();
+      }
+      sysExInternalHeaderFound = false;
+      sysExInternalMsgIdx = 0;
+      sysExInternalBuffer[0] = 0;
   }
 
-	////////////////////////////////////////////////
-	// SYSTEM EXCLUSIVE
-	////////////////////////////////////////////////
-  if (sysExMode ) {
-      if ( receivedByte >= 0x80 )  {
-        // End of SysEx -- send the last bytes
-        // SYSEX can be terminated by an F7 (EOX) or
-        // any other status byte except real time
-        // Force EOX in any cases to be clean
+  // Stop if not in sysexmode anymore here !
+  // The SYSEX error could be caused by another SOX, or Midi status...,
+  if ( ! serialMidiParser->isSysExMode() ) return;
 
-        // Do we have an sysex internal message to parse ?
-        if ( sysExInternal ) {
+  // Fill USB sysex packet
+  packetLen++;
+  ((uint8_t*)&MIDIEvent)[packetLen] = readByte ;
 
-            // Save the len at the first pos
-            sysExInternalBuffer[0] = sysExInternalMsgIdx - sizeof(sysExInternalHeader) + 1;
+	// Is it an internal SYSEX message for the MIDI interface   ?
 
-            // Process internal Sysex
-            ProcessSysExInternal();
-
-            sysExMode = sysExInternal = false;
-            dataBufferIndex = 0;
-            if ( receivedByte == 0xF7 ) return false;
-        }
-        else
-        {
-            * ( &MIDIEvent.Data1 + dataBufferIndex++ ) = 0XF7 ;
-            MIDIEvent.Event     = 0x4 + dataBufferIndex;
-            MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
-            sysExMode = false;
-            dataBufferIndex = 0;
-            if ( receivedByte == 0xF7 ) return true;
+  if ( readByte == sysExInternalHeader[sysExInternalMsgIdx] || sysExInternalHeaderFound ) {
+      if (sysExInternalHeaderFound) {
+        // Start storing the message in the msg buffer
+        // If Message too big. don't store...
+        if ( sysExInternalBuffer[0] <  sizeof(sysExInternalBuffer)-1  ) {
+            sysExInternalBuffer[0]++;
+            sysExInternalBuffer[sysExInternalBuffer[0]]  = readByte;
         }
 
       }
       else {
-        // SYSEX DATA
-
-        // Is it an internal message for the MIDI interface   ?
-        // We just receive an F0, check if our header is right after
-        if ( !sysExInternal ) {
-          if ( MIDIEvent.Data1 == 0xF0 && dataBufferIndex == 1 &&
-               receivedByte == sysExInternalHeader[0] ) {
-                 sysExInternalMsgIdx = 0;
-                 sysExInternal = true;
-                 return false;
-          }
+        sysExInternalMsgIdx++;
+        if (sysExInternalMsgIdx >= sizeof(sysExInternalHeader) ) {
+            sysExInternalHeaderFound = true;
+            sysExInternalBuffer[0] = 0;
         }
-        else
-        {
-          sysExInternalMsgIdx++;
-          // header complete ?
-          if ( sysExInternalMsgIdx >= sizeof(sysExInternalHeader) )  {
-            // Start storing the message in the msg buffer
-            // If Message too big. Stop exclusive
-            if (sysExInternalMsgIdx - sizeof(sysExInternalHeader)  >= (sizeof(sysExInternalBuffer)-1 ) ) {
-                sysExMode = sysExInternal = false ;
-                dataBufferIndex = 0;
-            } else sysExInternalBuffer[sysExInternalMsgIdx - sizeof(sysExInternalHeader) + 1 ]  = receivedByte;
-            return false;
-          }
-          else {
-            // Still receiving the header or error
-            if ( receivedByte != sysExInternalHeader[sysExInternalMsgIdx] ) {
-              sysExMode = sysExInternal = false ;
-              dataBufferIndex = 0;
-            }
-            return false;
-          }
-
-        }
-
-        // Sysex data as usual
-        * ( &MIDIEvent.Data1 + dataBufferIndex++ ) =  receivedByte ;
-        // Packet full ?
-        if (dataBufferIndex == 3)  {
-          MIDIEvent.Event     = 0x4;    /* 4 - sysex starts or continues */
-          MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
-          dataBufferIndex = 0;
-          return true;
-        }
-        return false;
-
+        else sysExInternalHeaderFound = false;
       }
+  } else sysExInternalMsgIdx =0;
+
+  // Packet complete ?
+  if (packetLen == 3 ) {
+      MIDIEvent.Event  =  4 ; // Sysex start or continue
+			MIDI_SendEventPacket(&MIDIEvent);
+			packetLen = 0;
+    	memset(&MIDIEvent,0,4);
   }
-  // Ignore EOX when not in SYSEX mode
-  else if (receivedByte == 0xF7 ) return false;
-
-	////////////////////////////////////////////////
-	// SYSTEM COMMON messages
-	////////////////////////////////////////////////
-
-  // Clear RUNNING Status
-  if (receivedByte >= 0xF0 ) runningStatus  = 0;
-
-  // SYSEX START
-  if (receivedByte == 0xF0 ) {
-      sysExMode           = true;   // Start SYSEX packets
-      MIDIEvent.Data1     = receivedByte;
-      dataBufferIndex     = 1;
-      return false;       // Stay at the sysex level parsing above
-  } else
-
-  // RESERVED SYSTEM COMMON
-	if (receivedByte == 0xF4 || receivedByte == 0xF5 ) {
-		return false;
-	} else
-
-	// Midi Quarter Frame MTC
-  if (receivedByte == 0xF1 ) {
-			MIDIEvent.Event    	= 0x2; // 2 - two-byte system common message
-      nextMidiMsgLength 	= 2; 		// This is an exception. We must fix the length...
-      dataBufferIndex 		= 0;
-	} else
-
-	// Song position
-  if ( receivedByte == 0xF2){
-      MIDIEvent.Event     = 0x3; // 3 - three-byte system common message */
-      nextMidiMsgLength 	= 3; 	 // This is an exception. We must fix the length...
-      dataBufferIndex 		= 0;
-  } else
-
-	// Song select
-  if (receivedByte == 0xF3  ) {
-      MIDIEvent.Event     = 0x2; // 2 - two-byte system common message
-      nextMidiMsgLength 	= 2;	 // This is an exception. We must fix the length...
-      dataBufferIndex 		= 0;
- } else
-
-	// Tune Request
-	if ( receivedByte == 0xF6 ) {
-       MIDIEvent.Event    = 0x5; // single-byte system common message
-			 nextMidiMsgLength 	= 1;
-			 dataBufferIndex 		= 0;
-  } else
-
-////////////////////////////////////////////////
-// CHANNEL MESSAGES
-////////////////////////////////////////////////
-
-  if (receivedByte >= 0x80)  {
-    // A new status byte from serial midi */
-    // Fill the USB packet header. Keep the CIN only.
-		// Get the data length for this status byte from the table
-    MIDIEvent.Event     = (receivedByte >> 4);
-    nextMidiMsgLength = BytesIn_USB_MIDI_Command[MIDIEvent.Event];
-    dataBufferIndex = 0;
-    runningStatus = receivedByte; // Running status
-  } else
-
-////////////////////////////////////////////////
-// MIDI DATA FROM 00 TO 0X7F
-////////////////////////////////////////////////
-	if ( dataBufferIndex == 0  )
-  {
-    // If the previous packet was sent, and we get no status byte,
-		// we can apply Running status.
-    // 0x90 0x3C 0x7F 0x3C 0x00     <- Note-On Note-Off
-    if ( runningStatus >0 ) {
-      // As we never delete the MIDI packet, we still have the previous command
-      // and status bytes. So we simply update the data index.
-      // Move to data 2
-      dataBufferIndex ++;
-			runningStatus = 0;
-    } else return false; // Ignore data according MIDI specs
-  }
-
-////////////////////////////////////////////////
-// Fill Packet data
-////////////////////////////////////////////////
-
-   * ( &MIDIEvent.Data1 + dataBufferIndex++) = receivedByte ;
-
-	// Send complete packet to USB
-	if (dataBufferIndex == nextMidiMsgLength) {
-    MIDI_SendEventPacket(&MIDIEvent,dataBufferIndex);
-    dataBufferIndex = 0;
-    return true;
-  }
-
-  return false;
 }
 
 // ----------------------------------------------------------------------------
 // Send a MIDI Event packet to the USB
 // ----------------------------------------------------------------------------
 
-static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent,uint8_t dataSize)
+static void MIDI_SendEventPacket(const MIDI_EventPacket_t *MIDIEvent)
 {
-
-	// Zero padding
-  if (dataSize < 3 ) {
-         memset(  (void*) (&MIDIEvent->Data1 + dataSize),0, 3 - dataSize);
-  }
  	MIDI_Device_SendEventPacket(&Keyboard_MIDI_Interface, MIDIEvent);
 	MIDI_Device_Flush(&Keyboard_MIDI_Interface);
 
@@ -694,11 +553,25 @@ static void ProcessUsbToMidi(void)
 	/* Check if a MIDI command has been received */
 	if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent)) {
 			uint8_t CIN = MIDIEvent.Event & 0x0F;
-			if (CIN >= 2 ) {
-					uint8_t BytesIn = BytesIn_USB_MIDI_Command[CIN];
-					RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data1 );
-					if ( BytesIn >=2 ) RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data2 );
-					if ( BytesIn ==3 ) RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data3 );
+			switch (CIN) {
+							// 1 byte
+							case 0x05: case 0x0F:
+								RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data1 );
+								break;
+
+							// 2 bytes
+							case 0x02: case 0x06: case 0x0C: case 0x0D:
+								RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data1 );
+								RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data2 );
+								break;
+
+							// 3 bytes
+							case 0x03: case 0x07: case 0x04: case 0x08:
+							case 0x09: case 0x0A: case 0x0B: case 0x0E:
+								RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data1 );
+								RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data2 );
+								RingBuffer_Insert(&USBtoUSART_Buffer, MIDIEvent.Data3 );
+								break;
 			}
 	}
 }

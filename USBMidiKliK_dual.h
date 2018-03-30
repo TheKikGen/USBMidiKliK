@@ -35,6 +35,8 @@
 	#include <LUFA/Drivers/Board/Board.h>
 	#include <LUFA/Drivers/Misc/RingBuffer.h>
   #include <LUFA/Drivers/USB/Class/CDCClass.h>
+
+	#include "midiXparser.h"
 	#include "EEPROM_Params.h"
 
 
@@ -56,7 +58,11 @@
 	static void ProcessSerialUsbMode(void);
 	static void ProcessMidiUsbMode(void);
 	static bool ProcessMidiToUsb(void);
-	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *,uint8_t);
+
+	void scanMidiSerialSysExToUsb( midiXparser* ) ;
+	void sendMidiSerialMsgToUsb( midiXparser*  ) ;
+
+	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *);
 	static void ProcessUsbToMidi(void);
 	static void ProcessSysExInternal(void);
 
