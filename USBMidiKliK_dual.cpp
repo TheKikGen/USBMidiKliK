@@ -149,7 +149,16 @@ void SetupHardware(void)
   DDRB  = 0x02;		// SET PB1 as OUTPUT and PB2/PB3 as INPUT
   PORTB = 0x0C;		// PULL-UP PB2/PB3
 
+#ifndef SINGLE_BOOT_MODE
+	#warning "DUAL BOOT MODE"
+
 	MIDIBootMode  		= ( (PINB & 0x04) == 0 ) ? false : true;
+
+#else
+	#warning "SINGLE BOOT MODE"
+
+	MIDIBootMode = true;
+#endif
 
   if (MIDIBootMode) {
 		Serial_Init(31250, false);
@@ -366,13 +375,13 @@ static void ProcessMidiUsbMode(void) {
 // Check whether we've received any MIDI data from the USART, and if it's
 // complete send it over USB. return true if a packet was sent
 // ----------------------------------------------------------------------------
-static bool ProcessMidiToUsb()
+static void ProcessMidiToUsb()
 {
 
-  if (USB_DeviceState != DEVICE_STATE_Configured) return false;
+  if (USB_DeviceState != DEVICE_STATE_Configured) return ;
 
 	// Get a byte from the ring buffer
-  if ( RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) return false;
+  if ( RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) return ;
 
 	uint8_t receivedByte = RingBuffer_Remove(&USARTtoUSB_Buffer) ;
 
