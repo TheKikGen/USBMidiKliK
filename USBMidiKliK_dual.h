@@ -57,7 +57,7 @@
 
 	static void ProcessSerialUsbMode(void);
 	static void ProcessMidiUsbMode(void);
-	static bool ProcessMidiToUsb(void);
+	static void ProcessMidiToUsb(void);
 
 	void scanMidiSerialSysExToUsb( midiXparser* ) ;
 	void sendMidiSerialMsgToUsb( midiXparser*  ) ;
