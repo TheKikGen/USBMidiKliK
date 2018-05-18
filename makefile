@@ -11,8 +11,8 @@
 
 # Run "make help" for target help.
 
-#MCU          = atmega16u2
-MCU          = atmega32u4
+MCU          = atmega16u2
+#MCU          = atmega32u4
 ARCH         = AVR8
 BOARD        = UNO
 F_CPU        = 16000000
@@ -30,7 +30,8 @@ SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
 LUFA_PATH    = ../../LUFA
 
-CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -std=gnu++11 -DSINGLE_BOOT_MODE
+CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -std=gnu++11
+#CC_FLAGS     += -DSINGLE_BOOT_MODE
 LD_FLAGS     =
 
 # ARDUINO libraries
