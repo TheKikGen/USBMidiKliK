@@ -465,15 +465,13 @@ void scanMidiSerialSysExToUsb( midiXparser* serialMidiParser ) {
   // will not understand if we send the packet as is
   if ( readByte == midiXparser::eoxStatus || serialMidiParser->isSysExError() ) {
       // Force the eox byte in case we have a SYSEX error.
+			// In case of eror, the readbyte is already parsed by SerialMidiParser here,
+			// so we don't loose it.
+
       packetLen++;
-    
-      // Issue #3 correction - Missing Bytes on SysEx
-      if(serialMidiParser->isSysExError())  	  
-	MIDIEvent.Data1 = midiXparser::eoxStatus;
-      else
-	((uint8_t*)&MIDIEvent)[packetLen] = readByte;	  
-	  
-      // CIN = 5/6/7  sysex ends with one/two/three bytes,
+			((uint8_t*)&MIDIEvent)[packetLen] = midiXparser::eoxStatus;
+
+          // CIN = 5/6/7  sysex ends with one/two/three bytes,
       MIDIEvent.Event =  (packetLen + 4) ;
 			MIDI_SendEventPacket(&MIDIEvent);
 			packetLen = 0;
