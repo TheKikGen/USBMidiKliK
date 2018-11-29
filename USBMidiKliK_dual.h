@@ -9,12 +9,6 @@
 #ifndef _usbmidiklik_h
 #define _usbmidiklik_h
 
-
-	#define USB_TO_USART_BUFF_SIZE 32
-	#define USART_TO_USB_BUFF_SIZE 16
-	#define SYSEX_INTERNAL_BUFF_SIZE MIDI_PRODUCT_STRING_SIZE + 2
-
-
 	//#define BOARD BOARD_UNO
 
 	#include <avr/io.h>
@@ -34,11 +28,31 @@
 	#include <LUFA/Drivers/Board/LEDs.h>
 	#include <LUFA/Drivers/Board/Board.h>
 	#include <LUFA/Drivers/Misc/RingBuffer.h>
-  #include <LUFA/Drivers/USB/Class/CDCClass.h>
+	#include <LUFA/Drivers/USB/Class/CDCClass.h>
 
 	#include "midiXparser.h"
 	#include "EEPROM_Params.h"
 
+	// Number of MIDI jacks (also number of cables by construction)
+	#define SERIAL_INTERFACE_MAX 1
+
+	// MIDI Routing
+	#define FROM_SERIAL 0
+	#define FROM_USB    1
+
+	// Use this 32 bits structure to send and receive packet to/from USB
+	// This is not the standard LUFA midi packet but we use this one
+	// for compatibility resasons on other platforms
+	union EVENT_t {
+	    uint32_t i;
+	    uint8_t  packet[4];
+	};
+	#define midiPacket_t union EVENT_t
+
+
+	#define USB_TO_USART_BUFF_SIZE 32
+	#define USART_TO_USB_BUFF_SIZE 16
+	#define SYSEX_INTERNAL_BUFF_SIZE MIDI_PRODUCT_STRING_SIZE + 2
 
 	#define LEDMASK_USB_NOTREADY      LEDS_LED1
 	#define LEDMASK_USB_ENUMERATING   LEDS_LED2
@@ -46,8 +60,16 @@
 	#define LEDMASK_USB_ERROR         LEDS_LED1
 
 	/* Function Prototypes: */
-	void CheckEEPROM(void);
-	void SetupHardware(void);
+	static void CheckEEPROM(void);
+	static void SetupHardware(void);
+	static void ConfigRootMenu();
+	static uint8_t USBSerialScanHexChar(char *, uint8_t ,char,char);
+	static void USBSerialPutChar(char );
+	static void USBSerialPutStr(char *,bool);
+	static void USBSerialPutStrN(char *, bool ,uint8_t );
+	static char USBSerialGetChar();
+	static void ShowCurrentSettings();
+
 	void EVENT_USB_Device_Connect(void);
 	void EVENT_USB_Device_Disconnect(void);
 	void EVENT_USB_Device_ConfigurationChanged(void);
@@ -58,12 +80,19 @@
 	static void ProcessSerialUsbMode(void);
 	static void ProcessMidiUsbMode(void);
 	static void ProcessMidiToUsb(void);
-
-	void scanMidiSerialSysExToUsb( midiXparser* ) ;
-	void sendMidiSerialMsgToUsb( midiXparser*  ) ;
-
-	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *);
 	static void ProcessUsbToMidi(void);
+	static void SendMidiSerialMsgToUsb( uint8_t , midiXparser*);
+	static void PrepareSysExPacket( uint8_t , midiXparser* );
+	static void ParseSysExInternal(const midiPacket_t ) ;
+	static void RoutePacketToTarget(uint8_t , const midiPacket_t *);
+	static void MidiUSBWritePacket(const midiPacket_t *);
+	static void SerialWritePacket(const midiPacket_t *);
 	static void ProcessSysExInternal(void);
+	static bool SetProductString(char *,uint8_t );
+	static uint16_t GetInt16FromHex4Char(char *);
+	static uint8_t GetInt8FromHexChar(char);
+	static uint16_t GetInt16FromHex4Bin(char *);
+	static void RebootSerialMode();
+	static void DefaultChannelMapping();
 
 #endif

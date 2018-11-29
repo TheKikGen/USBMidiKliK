@@ -11,8 +11,12 @@
 
 # Run "make help" for target help.
 
+# For Arduino Uno
 MCU          = atmega16u2
+
+# For Arduino Pro Micro
 #MCU          = atmega32u4
+
 ARCH         = AVR8
 BOARD        = UNO
 F_CPU        = 16000000
@@ -30,8 +34,17 @@ SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
 LUFA_PATH    = ../../LUFA
 
-CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -std=gnu++11
+CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive
+
+# From gcc 4.7
+CC_FLAGS     += -std=gnu++11
+
+# Before gcc 4.7
+#CC_FLAGS     += -std=c++0x
+
+# For Arduino Pro Micro
 #CC_FLAGS     += -DSINGLE_BOOT_MODE
+
 LD_FLAGS     =
 
 # ARDUINO libraries
@@ -83,7 +96,7 @@ ARDUINO_DEVICE_VENDORID							= 0x2341
 ARDUINO_DEVICE_PRODUCTID 						= 0x0001
 
 ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino (www.arduino.cc)"
-ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Uno"
+ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Uno dual midi"
 ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 
 # MIDI DEVICE
@@ -93,7 +106,7 @@ ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 MIDI_DEVICE_VENDORID								= 0x2912
 MIDI_DEVICE_PRODUCTID 							= 0x1967
 MIDI_DEVICE_MANUFACTURER_STRING 		= "The KikGen MIDI factory"
-# The MIDI_DEVICE_PRODUCT_STRING size must not be changed as it is store in PROGMEM
+# The MIDI_DEVICE_PRODUCT_STRING size must not be changed as it is stored in PROGMEM
 # and can be changed dynamically later...
 MIDI_DEVICE_PRODUCT_STRING 					= "USB MidiKliK $(BUILD_STRING)                       "
 
@@ -117,6 +130,7 @@ buildinc:
 		make all BUILD_CFLAGS="-DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')"\
 		BUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE)) BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S') \
 		BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
+
 # Default target
 all:
 
