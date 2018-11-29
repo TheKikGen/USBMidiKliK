@@ -45,9 +45,21 @@
 	#define LEDMASK_USB_READY         LEDS_LED2
 	#define LEDMASK_USB_ERROR         LEDS_LED1
 
+	// MIDI Routing
+	#define FROM_SERIAL 0
+	#define FROM_USB    1
+
 	/* Function Prototypes: */
-	void CheckEEPROM(void);
-	void SetupHardware(void);
+	static void CheckEEPROM(void);
+	static void SetupHardware(void);
+	static void ConfigRootMenu();
+	static uint8_t USBSerialScanHexChar(char *, uint8_t ,char,char);
+	static void USBSerialPutChar(char );
+	static void USBSerialPutStr(char *,bool);
+	static void USBSerialPutStrN(char *, bool ,uint8_t );
+	static char USBSerialGetChar();
+	static void ShowCurrentSettings();
+
 	void EVENT_USB_Device_Connect(void);
 	void EVENT_USB_Device_Disconnect(void);
 	void EVENT_USB_Device_ConfigurationChanged(void);
@@ -58,12 +70,20 @@
 	static void ProcessSerialUsbMode(void);
 	static void ProcessMidiUsbMode(void);
 	static void ProcessMidiToUsb(void);
-
-	void scanMidiSerialSysExToUsb( midiXparser* ) ;
-	void sendMidiSerialMsgToUsb( midiXparser*  ) ;
-
-	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *);
 	static void ProcessUsbToMidi(void);
+	static void sendMidiSerialMsgToUsb( midiXparser*  ) ;
+	static void scanMidiSerialSysExToUsb( midiXparser* ) ;
+	static void routePacketToTarget(uint8_t ,const MIDI_EventPacket_t *);
+	static void ParseSysExInternal(const MIDI_EventPacket_t *);
+	static void MIDI_SendEventPacket(const MIDI_EventPacket_t *);
+	static void sendMidiUsbPacketToSerial(const MIDI_EventPacket_t *);
+
 	static void ProcessSysExInternal(void);
+	static bool SetProductString(char *,uint8_t );
+	static uint16_t GetInt16FromHex4Char(char *);
+	static uint8_t GetInt8FromHexChar(char);
+	static uint16_t GetInt16FromHex4Bin(char *);
+	static void RebootSerialMode();
+	static void DefaultChannelMapping();
 
 #endif

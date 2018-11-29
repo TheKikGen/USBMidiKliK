@@ -148,21 +148,21 @@ bSubordinateInterface[0] : 0x01
 */
 	.CDC_Functional_Header =
 			{
-			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalHeader_t), .Type = DTYPE_CSInterface},
+			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalHeader_t), .Type = CDC_DTYPE_CSInterface},
 			.Subtype                = CDC_DSUBTYPE_CSInterface_Header,
 			.CDCSpecification       = 0x1001,
 			},
 
 	.CDC_Functional_ACM =
 		{
-			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalACM_t), .Type = DTYPE_CSInterface},
+			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalACM_t), .Type = CDC_DTYPE_CSInterface},
 			.Subtype                = CDC_DSUBTYPE_CSInterface_ACM,
 			.Capabilities           = 0x06
 		},
 
 	.CDC_Functional_Union =
 		{
-			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalUnion_t), .Type = DTYPE_CSInterface},
+			.Header                 = {.Size = sizeof(USB_CDC_Descriptor_FunctionalUnion_t), .Type = CDC_DTYPE_CSInterface},
 			.Subtype                = CDC_DSUBTYPE_CSInterface_Union,
 			.MasterInterfaceNumber  = INTERFACE_ID_CDC_CCI,
 			.SlaveInterfaceNumber   = INTERFACE_ID_CDC_DCI,
