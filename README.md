@@ -161,8 +161,8 @@ or
 
     F0 77 77 77 <sysex function id = 0x0D> <Midi IN channel> <MUTE = 0x00 | DEFAULT = 0x7F> F7
 
-You can pass a variable number of channels, but 16 as a maximum. 
 Midi IN and Targets midi OUT channels are passed as bytes from 1 to 16 (0x01 to 0x10).
+You can pass a variable number of MIDI OUT channels, but 16 as a maximum. 
 
 Passing 0x00 immediatly after the MIDI IN byte will "mute" the channel.
 Passing 0x7F will reset all the mapping to default.  Default is 1=>1, 2=2,....16=>16
