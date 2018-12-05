@@ -151,7 +151,26 @@ Example of an Arduino code you can use in a sketch :
                 Serial.write( 0xF7 );        
                 resetMidiUSB();
           }
-## Define a new midi channel mapping
+## Define a new midi channel mapping (0xD)
 
-todo
+It is possible to remap a midi channel to one or many other channels, when you need to change, for example, static midi channels in an equipment.  The sysex message structure is the following :
+     
+     F0 77 77 77 <sysex function id = 0x0D> <Midi IN channel> <n bytes Midi OUT targets> F7
+     
+or
+
+    F0 77 77 77 <sysex function id = 0x0D> <Midi IN channel> <MUTE = 0x00 | DEFAULT = 0x7F> F7
+
+You can pass a variable number of channels, but 16 as a maximum. 
+Midi IN and Targets midi OUT channels are passed as bytes from 1 to 16 (0x01 to 0x10).
+
+Passing 0x00 immediatly after the MIDI IN byte will "mute" the channel.
+Passing 0x7F will reset all the mapping to default.  Default is 1=>1, 2=2,....16=>16
+
+For example, to map the midi channel 2 to channel 2,5 and 16,
+map the channel 3 to channel 4, and mute the channel 16, send the SYSEX MESSAGES :
+
+		F0 77 77 77 0D 02 02 05 10 F7
+		F0 77 77 77 0D 03 04 F7
+		F0 77 77 77 0D 10 00 F7
 
