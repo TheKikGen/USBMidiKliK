@@ -2,14 +2,16 @@
 A robust USB MIDI Arduino firmware, with a dual bootloader, based on the last version of the LUFA library.
 
 As other project, like HIDUINO, or MOCOLUFA (thanks to them for inspiration), USBMIDIKLIK allows your Arduino board to become a very reliable MIDI IN/OUT USB interface.  Despite the very good work done on these projects, i was facing some issues...
-An heavy MIDI traffic was blocking the serial, and some MIDI messages were purely ignored by the parser, like the song pointer position for example... more, these projects rely on a quite old version of the LUFA library.
+An heavy MIDI traffic (sysex...) was blocking the serial, and some MIDI messages were purely ignored by the parser, like the song pointer position for example. More, these projects rely on a quite old version of the LUFA library.
 
-USBMidiKliK uses interrupts and ring buffers to ensure that (fast) USB to (slow) midi transfers are reliable, plus a "more transparent as possible" midi parser. MIDI product device name is integrated in the makefile, and can also be modified by sysex...so easy to change.
+USBMidiKliK uses interrupts and ring buffers to ensure that (fast) USB to (slow) midi transfers are reliable, plus a "more transparent as possible" midi parser. MIDI product device name is integrated in the makefile, and can also be modified by sysex, or a configuration menu...so easy to change.
 
 This firmware is uploaded in the ATMEGA8U2 chip managing the USB, and changes the default USB serial descriptors to the MIDI ones.
 For more convenience when updates are needed, a "dual mode" is embedded, allowing to switch back to the USB serial : when the PB2/MOSI pin of the ATMEGA8U2 is connected to ground, the Arduino is a classical one again, and you can change and upload a new firmware in the ATMEGA328P (UNO) with the standard Arduino IDE.
 
-In "USB converter" MIDI mode, Serial directions are the following :
+Obviously, it is also possible to upload this firmware to other members of the Arduino family, like the Arduino Micro for example.
+
+With a Uno, in a "MIDI USB converter" mode, data flow are the following :
 
                                                                             ATMEGA 328P
            USB                          ATMEGA8U2                        UART NOT ACTIVE
@@ -30,21 +32,58 @@ If your project is a pure USB MIDI controller, simply setup serial to 31250 baud
 
 TTL/Serial MIDI IN and MIDI OUT conversion schematics can be found easily on the web.
 
-## Changing the device ProductStringName with a USB MIDIKLIK internal SYSEX
+# System Exclusive messages
 
-The last version (V1.1) allows to change the USB device ProductStringName via a SYSEX. The new name is saved in the ATMEGA8U EEPROM, so it persists even after powering off the Arduino.   The message structure is the following :
+Sysex have the following format :
+
+    F0 <USB MidiKlik sysex header = 0x77 0x77 0x77> <sysex function id > <data > F7
+
+## Serial Configuration menu Bootmode (function 0x08)
+
+This sysex enables the configuration menu accessible from the USB serial. Immediatly after sending this sequence, the interface reboots in CDC serial COM mode, allowing you to open a terminal to configure easily USBMIDIKLIK.
+
+     F0 77 77 77 08 F7
+
+The following menu should appear after pressing ENTER :
+
+     USBMIDIKliK                                                                     
+     (c)TheKikGen Labs                                                               
+                                                                                     
+     0.Show current settings                                                         
+     1.Reload settings                                                               
+     2.Product string                                                                
+     3.VID - PID                                                                     
+     4.Channel mapping                                                               
+     5.Default channel mapping                                                       
+     a.Arduino mode                                                                  
+     s.Save & quit                                                                   
+     x.Abort                                                                         
+     =>s  
+
+## Temporary boot in Arduino serial mode (0x09)
+
+If you need to update the Arduino firmware without positionnig a jumper, you can you cand send this sysex that will reboot the device in serial mode, until the next boot.
+
+     F0 77 77 77 09 F7
+
+## Hardware reset (0x0A)
+
+To avoid unplugging the USB cable, you cand send this sysex that will do an harware reset programatically.  The full Arduino board will be resetted (ATMEGA8U2 USBMidiKliK firmware + ATMEGA328P and sketch firmware).
+The sysex message structure is the following :
+
+       F0 77 77 77 <sysex function id = 0x0A> F7
+
+For example to set ProductString, VendorID, Product ID and restart the USB Midi interface with new data, send the following sysex :
+
+      F0 77 77 77 0B 55 53 42 20 4D 69 64 69 4B 6C 69 4B F7
+      F0 77 77 77 0C 08 0F 01 02 09 00 06 07 F7
+      F0 77 77 77 0A F7
+
+## Changing the device ProductStringName (0X0B) 
+
+It is possible to change the USB device ProductStringName via a SYSEX or from the configuration menu. The new name is saved in the ATMEGA8U EEPROM, so it persists even after powering off the Arduino.   The message structure is the following :
 
        F0 <USB MidiKlik sysex header = 0x77 0x77 0x77> <sysex function id = 0x0b> <USB Midi Product name > F7
-
-Only Serial is parsed (but USB will be in a next version), so you must send the SYSEX from an Arduino sketch.  
-If you prefer to use a tool like MIDI-OX and you have MIDI IN/OUT jacks:
-- connect the Arduino board with the USBMidiKliK firmware to USB (default MIDI mode)
-- connect the MIDIOUT JACK to the MIDI IN JACK
-- Open MIDI-OX and connect the USBMidiKliK in the MIDI output device dialog box
-- Open the SysEx windows in the "View" menu
-- Enter the SYSEX msg in the command window and click on "Send Sysex" in the "CommandWindow" menu.  
-- Unplug/plug the USB cable or send a Midi USB HardReset sysex (see below)
-- Quit and reopen MIDI-OX and you should see a new name in the MIDI devices dialog box.
 
 The following SYSEX sent from an Arduino sketch will change the name of the MIDI interface to "USB MidiKliK" :
 
@@ -72,7 +111,7 @@ Example code you can use in your Arduino sketch :
 
       Serial.write( 0xF7 );     
 
-## Changing the USB VendorID and ProductID with a USB MIDIKLIK internal SYSEX
+## Changing the USB VendorID and ProductID (0x0C)
 
 In the same way, you can also change the USB Vendor and Product Ids with a SYSEX. They are also saved in the ATMEGA8U EEPROM after an update and persist after power off. The sysex message structure is the following :
 
@@ -112,22 +151,7 @@ Example of an Arduino code you can use in a sketch :
                 Serial.write( 0xF7 );        
                 resetMidiUSB();
           }
+## Define a new midi channel mapping
 
-## USB Midi temporary boot in serial mode (0x09)
+todo
 
-If you need to update the firmware without positionnig a jumper, you can you cand send this sysex that will reboot the device in serial mode, until the next boot.
-
-       F0 77 77 77 <sysex function id = 0x09> F7
-
-## USB Midi hard reset with a USB MIDIKLIK internal SYSEX (0x0A)
-
-To avoid unplugging the USB cable, you cand send this sysex that will do an harware reset programatically.  The full Arduino board will be resetted (ATMEGA8U2 USBMidiKliK firmware + ATMEGA328P and sketch firmware).
-The sysex message structure is the following :
-
-       F0 77 77 77 <sysex function id = 0x0A> F7
-
-For example to set ProductString, VendorID, Product ID and restart the USB Midi interface with new data, send the following sysex :
-
-      F0 77 77 77 0B 55 53 42 20 4D 69 64 69 4B 6C 69 4B F7
-      F0 77 77 77 0C 08 0F 01 02 09 00 06 07 F7
-      F0 77 77 77 0A F7
