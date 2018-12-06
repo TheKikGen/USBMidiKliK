@@ -1,4 +1,4 @@
-goto uno
+rem goto uno
 :micro
 echo Reset the Arduino micro now...
 pause

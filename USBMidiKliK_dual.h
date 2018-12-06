@@ -43,21 +43,25 @@
 	// Use this 32 bits structure to send and receive packet to/from USB
 	// This is not the standard LUFA midi packet but we use this one
 	// for compatibility resasons on other platforms
-	union EVENT_t {
+	union midiPacket_t {
 	    uint32_t i;
 	    uint8_t  packet[4];
 	};
-	#define midiPacket_t union EVENT_t
 
+	#define USB_TO_USART_BUFF_SIZE 12
+	#define USART_TO_USB_BUFF_SIZE 30
 
-	#define USB_TO_USART_BUFF_SIZE 32
-	#define USART_TO_USB_BUFF_SIZE 16
+	#define SYSEX_INTERNAL_HEADER 0xF0,0x77,0x77,0x77
 	#define SYSEX_INTERNAL_BUFF_SIZE MIDI_PRODUCT_STRING_SIZE + 2
 
 	#define LEDMASK_USB_NOTREADY      LEDS_LED1
 	#define LEDMASK_USB_ENUMERATING   LEDS_LED2
 	#define LEDMASK_USB_READY         LEDS_LED2
 	#define LEDMASK_USB_ERROR         LEDS_LED1
+	#define TICK_COUNT 3000
+	// Reset macros
+	#define SoftReset_AVR() GO $0000;
+	#define HardReset_AVR() wdt_enable(WDTO_30MS); while(1) {}
 
 	/* Function Prototypes: */
 	static void CheckEEPROM(void);
@@ -81,9 +85,11 @@
 	static void ProcessMidiUsbMode(void);
 	static void ProcessMidiToUsb(void);
 	static void ProcessUsbToMidi(void);
-	static void SendMidiSerialMsgToUsb( uint8_t , midiXparser*);
-	static void PrepareSysExPacket( uint8_t , midiXparser* );
-	static void ParseSysExInternal(const midiPacket_t ) ;
+	static void SerialTask(void);
+	static void Serial_Insert(byte);
+	static void RouteStdMidiMsg( uint8_t , midiXparser*);
+	static void RouteSysExMidiMsg( uint8_t , midiXparser* );
+	static void ParseSysExInternal(const midiPacket_t *);
 	static void RoutePacketToTarget(uint8_t , const midiPacket_t *);
 	static void MidiUSBWritePacket(const midiPacket_t *);
 	static void SerialWritePacket(const midiPacket_t *);
@@ -92,7 +98,7 @@
 	static uint16_t GetInt16FromHex4Char(char *);
 	static uint8_t GetInt8FromHexChar(char);
 	static uint16_t GetInt16FromHex4Bin(char *);
-	static void RebootSerialMode();
+	static void BootloaderMode();
 	static void DefaultChannelMapping();
 
 #endif

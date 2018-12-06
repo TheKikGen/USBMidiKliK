@@ -22,7 +22,6 @@
 
 uint16_t tx_ticks = 0;
 uint16_t rx_ticks = 0;
-const uint16_t TICK_COUNT = 3000;
 
 // To manage the dual boot
 bool    MIDIBootMode  = false;
@@ -35,8 +34,29 @@ midiXparser midiSerial;
 // Be aware that the 0x77 manufacturer id is reserved in the MIDI standard (but not used)
 // The second byte is usually an id number or a func code + the midi channel (any here)
 // The Third is the product id
-static  uint8_t sysExInternalHeader[] = { 0xF0,0x77,0x77,0x77} ;
+const  uint8_t PROGMEM sysExInternalHeader[] = { SYSEX_INTERNAL_HEADER} ;
 static  uint8_t sysExInternalBuffer[SYSEX_INTERNAL_BUFF_SIZE] ;
+
+// MIDI USB packet lenght
+const uint8_t PROGMEM CINToLenTable[] =
+{
+	0,
+	0,
+	2, // 0x02
+	3, // 0x03
+	3, // 0x04
+	1, // 0x05
+	2, // 0x06
+	3, // 0x07
+	3, // 0x08
+	3, // 0x09
+	3, // 0x0A
+	3, // 0x0B
+	2, // 0x0C
+	2, // 0x0D
+	3, // 0x0E
+	1  // 0x0F
+};
 
 // Ring Buffers
 
@@ -52,10 +72,6 @@ USB_Descriptor_String_t * ProductStringMIDI;
 extern USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface;
 extern USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface;
 extern USB_Descriptor_Device_t DeviceDescriptorMIDI;
-
-// Reset macros
-#define SoftReset_AVR() GO $0000;
-#define HardReset_AVR() wdt_enable(WDTO_30MS); while(1) {}
 
 ///////////////////////////////////////////////////////////////////////////////
 // MAIN START HERE
@@ -162,11 +178,6 @@ static void SetupHardware(void)
 #endif
 
 
-// Debug
-//MIDIBootMode = true;
-//EEPROM_Params.nextBootMode = bootModeConfigMenu;
-// End Debug
-
 	if (MIDIBootMode) {
 		// A previous SYSEX asked for a one shot serial boot mode
 		if  ( EEPROM_Params.nextBootMode != bootModeMidi ) {
@@ -179,9 +190,6 @@ static void SetupHardware(void)
 
   if (MIDIBootMode) {
 		Serial_Init(31250, false);
-		midiSerial.setMidiChannelFilter(midiXparser::allChannel);
-		midiSerial.setMidiMsgFilter( midiXparser::allMidiMsg );
-		midiSerial.setSysExFilter(true,0); // Sysex on the fly
 	}
 	else
 		Serial_Init(9600, false);
@@ -216,7 +224,7 @@ static void ConfigRootMenu()
 
 	for ( ;; )
 		{
-			USBSerialPutStr(PSTR("\n\nUSBMIDIKliK MENU\n"),true);
+			USBSerialPutStr(PSTR("\n\nUSBMIDIKliK\n"),true);
 			USBSerialPutStr(PSTR("(c)TheKikGen Labs\n\n"),true);
 			USBSerialPutStr(PSTR("0.Show current settings\n"),true);
 			USBSerialPutStr(PSTR("1.Reload settings\n"),true);
@@ -224,7 +232,7 @@ static void ConfigRootMenu()
 			USBSerialPutStr(PSTR("3.VID - PID\n"),true);
 			USBSerialPutStr(PSTR("4.Channel mapping\n"),true);
 			USBSerialPutStr(PSTR("5.Default channel mapping\n"),true);
-			USBSerialPutStr(PSTR("a.Arduino mode\n"),true);
+			USBSerialPutStr(PSTR("a.Arduino bootloader mode\n"),true);
 			USBSerialPutStr(PSTR("s.Save & quit\n"),true);
 			USBSerialPutStr(PSTR("x.Abort\n"),true);
 			USBSerialPutStr(PSTR("=>"),true);
@@ -271,14 +279,14 @@ static void ConfigRootMenu()
 					USBSerialPutStr(PSTR("\nMIDI IN (hex 0-f) : "),true);
 					USBSerialScanHexChar( (char *) buff, 1, 0, 0);
 					c = buff[0];
-					EEPROM_Params.midiChannelMap[c] = 0L;
+					EEPROM_Params.midiChannelMap[(uint8_t) c] = 0;
 					USBSerialPutStr(PSTR(" ->OUT (n hex 0-f) : "),true);
 					i = USBSerialScanHexChar( (char *) buff, 16, 13,',');
 					if ( i == 0) {
 							USBSerialPutStr(PSTR("Muted"),true);
 					} else {
 						for ( j = 0 ; j < i ; j++ ) {
-							EEPROM_Params.midiChannelMap[c] += ( 1 << buff[j] );
+							EEPROM_Params.midiChannelMap[(uint8_t)c] |= ( 1 << buff[j] );
 							CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 							USB_USBTask();
 						}
@@ -303,11 +311,11 @@ static void ConfigRootMenu()
 
 				// Jump to Arduino Mode
 				case 'a':
-					USBSerialPutStr(PSTR("\nArduino mode. Bye.\n\n"),true);
-					RebootSerialMode();
+					USBSerialPutStr(PSTR("\nArduino bootloader mode. Bye.\n\n"),true);
+					BootloaderMode();
 					break;
 
-				case 'q':
+				case 'x':
 					HardReset_AVR();
 					break;
 			}
@@ -399,23 +407,21 @@ static void ShowCurrentSettings() {
 
 	USBSerialPutStr(PSTR("\n\nMagic - V - Build :"),true);
 	USBSerialPutStrN( (char *)&EEPROM_Params.signature , false,sizeof(EEPROM_Params.signature));
-	USBSerialPutStr(PSTR("-"),true);
+	USBSerialPutStr(PSTR(" - "),true);
 	USBSerialPutStr( itoa(EEPROM_Params.prmVer,buff,10), false);
-	USBSerialPutStr(PSTR("-"),true);
+	USBSerialPutStr(PSTR(" - "),true);
 	USBSerialPutStr( itoa(EEPROM_Params.buildNumber,buff,10) , false);
 	USBSerialPutStr(PSTR("\nBootMode          :"),true);
 	USBSerialPutStr( itoa(EEPROM_Params.nextBootMode,buff,10) , false);
-
 	USBSerialPutStr(PSTR("\nVID - PID - STR   :"),true);
 	USBSerialPutStr( itoa(EEPROM_Params.vendorID,buff,16), false);
-	//sprintf(buff,"%X",EEPROM_Params.vendorID);USBSerialPutStr( buff , false);
 	USBSerialPutStr(PSTR(" - "),true);
 	USBSerialPutStr( itoa(EEPROM_Params.productID,buff,16), false);
-	//sprintf(buff,"%X",EEPROM_Params.productID);USBSerialPutStr( buff , false);
 	USBSerialPutStr(PSTR(" - "),true);
-	USBSerialPutStrN((char*)&EEPROM_Params.midiProductStringDescriptor.UnicodeString, false,sizeof(EEPROM_Params.midiProductStringDescriptor.UnicodeString));
+	USBSerialPutStrN((char*)&EEPROM_Params.midiProductStringDescriptor.UnicodeString,
+	       false,sizeof(EEPROM_Params.midiProductStringDescriptor.UnicodeString));
 
-	USBSerialPutStr(PSTR("\nChannel map       :\n"),true);
+	USBSerialPutStr(PSTR("\n\nChannel map :\n"),true);
 	for ( i=0; i<= 15; i++) {
 			USBSerialPutStr( itoa(i+1,buff,10), false);
 			USBSerialPutStr(PSTR(" <-> "),true);
@@ -597,11 +603,16 @@ static void ProcessMidiUsbMode(void) {
 	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
 	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
 
-  // Enable USART receive complete interrupt, transmitter, receiver
+  // Enable USART1 receive complete interrupt, transmitter, receiver
 	UCSR1B = 0;
 	UCSR1B = ((1 << RXCIE1) | (1 << TXEN1) | (1 << RXEN1));
 
 	PORTB  = 0x0E;	       /* PORTB1 = HIGH (LED ON) */
+
+	// Set Midi parser
+	midiSerial.setMidiChannelFilter(midiXparser::allChannel);
+	midiSerial.setMidiMsgFilter( midiXparser::allMidiMsg );
+	midiSerial.setSysExFilter(true); // Sysex on the fly
 
 	GlobalInterruptEnable();
 
@@ -632,13 +643,13 @@ static void ProcessMidiToUsb()
 
   if (USB_DeviceState != DEVICE_STATE_Configured) return ;
 
-	// Get a byte from the ring buffer
+	// Get a byte from the ring buffer populated from USART1 interrupt
   if ( RingBuffer_IsEmpty(&USARTtoUSB_Buffer) ) return ;
 
 	uint8_t receivedByte = RingBuffer_Remove(&USARTtoUSB_Buffer) ;
 
 	if ( midiSerial.parse( receivedByte)) {
-					SendMidiSerialMsgToUsb( 0, &midiSerial );
+					RouteStdMidiMsg( 0, &midiSerial );
 	}
 	else
 	// Check if a SYSEX msg is currently sent or terminated
@@ -649,9 +660,8 @@ static void ProcessMidiToUsb()
 					midiSerial.isSysExError()  ) )
 	{
 					// Process for eventual SYSEX unbuffered on the fly
-					PrepareSysExPacket(0, &midiSerial) ;
+					RouteSysExMidiMsg(0, &midiSerial) ;
 	}
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -666,29 +676,58 @@ static void ProcessUsbToMidi(void)
 {
 	MIDI_EventPacket_t MIDIEvent;
 
-	// Load the next byte from the USB/USART transmit buffer into the USART
-	// if transmit buffer space is available
-
-	if ( !(RingBuffer_IsEmpty(&USBtoUSART_Buffer)) && Serial_IsSendReady() ) {
-		Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
-		LEDs_TurnOnLEDs(LEDS_LED1);
-		tx_ticks = TICK_COUNT;
-	}
-
 	// Do not read the USB Midi command if not enough room in the USART buffer
 	// 3 bytes for an USB Midi event
-	if ( RingBuffer_GetFreeCount(&USBtoUSART_Buffer) < 4 ) return;
+	if ( RingBuffer_GetFreeCount(&USBtoUSART_Buffer) < 3 ) return;
 
 	/* Check if a MIDI command has been received */
 	if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent)) {
 				RoutePacketToTarget( FROM_USB,(midiPacket_t *)&MIDIEvent);
 	}
+	SerialTask();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Send a serial midi msg to the right USB midi cable
+// Manage transmission to Serial from Ring Buffer
 ///////////////////////////////////////////////////////////////////////////////
-static void SendMidiSerialMsgToUsb( uint8_t cable, midiXparser* serialMidiParser ) {
+
+static void SerialTask(void)
+{
+	if ( RingBuffer_IsEmpty(&USBtoUSART_Buffer) ) return;
+
+	// flush trhe ring buffer to avoid serial contention
+	while ( ! RingBuffer_IsEmpty(&USBtoUSART_Buffer) ) {
+				Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
+				LEDs_TurnOnLEDs(LEDS_LED1);
+				tx_ticks = TICK_COUNT;
+	}
+}
+
+static void Serial_Insert(byte sendByte)
+{
+	bool tx = false;
+
+	while ( RingBuffer_IsFull(&USBtoUSART_Buffer) ) {
+					Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
+					tx = true;
+	}
+
+	RingBuffer_Insert(&USBtoUSART_Buffer, sendByte);
+	if (Serial_IsSendReady()) {
+			Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
+			tx = true;
+	}
+
+	if (tx) {
+		LEDs_TurnOnLEDs(LEDS_LED1);
+		tx_ticks = TICK_COUNT;
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Route a serial midi msg to the right USB midi cable or other destination
+///////////////////////////////////////////////////////////////////////////////
+static void RouteStdMidiMsg( uint8_t cable, midiXparser* serialMidiParser ) {
 
     midiPacket_t usbMidiPacket;
 
@@ -732,7 +771,7 @@ static void SendMidiSerialMsgToUsb( uint8_t cable, midiXparser* serialMidiParser
 // SYSEX Error (not correctly terminated by 0xF7 for example) are cleaned up,
 // to restore a correct parsing state.
 ///////////////////////////////////////////////////////////////////////////////
-static void PrepareSysExPacketb( uint8_t cable, midiXparser* serialMidiParser ) {
+static void RouteSysExMidiMsg( uint8_t cable, midiXparser* serialMidiParser) {
   static midiPacket_t usbMidiSysExPacket[SERIAL_INTERFACE_MAX];
   static uint8_t packetLen[SERIAL_INTERFACE_MAX];
   static bool firstCall = true;
@@ -813,7 +852,9 @@ static void ParseSysExInternal(const midiPacket_t *pk) {
 				}
 			}	else
 
-			if ( sysExInternalHeader[sysExInternalMsgIdx] == pk->packet[ev] ) {
+			if ( pgm_read_byte(&sysExInternalHeader[sysExInternalMsgIdx]) == pk->packet[ev] ) {
+
+
 				sysExInternalMsgIdx++;
 				ev++;
 				if ( sysExInternalMsgIdx >= sizeof(sysExInternalHeader) ) {
@@ -850,7 +891,31 @@ static void RoutePacketToTarget(uint8_t source,const midiPacket_t *pk) {
 
   uint8_t cin   = pk->packet[0] & 0x0F ;
 
-	// Other channels messages
+	// Midi channel map - Only on channel msg
+	if ( cin >= 0x08 && cin <= 0x0E ) {
+
+			uint8_t c = pk->packet[1] & 0x0F ;
+			// Midi Channel Muted ?
+			if ( EEPROM_Params.midiChannelMap[c] == 0 ) return;
+			// No loop if Default routing
+			if ( EEPROM_Params.midiChannelMap[c] != (1UL << c) ) {
+					midiPacket_t pk2 = *pk ;
+					for ( uint8_t i = 0 ; i <= 15 ; i++ ) {
+						if ( EEPROM_Params.midiChannelMap[c] & (1 << i) ) {
+								pk2.packet[1] = (pk2.packet[1] & 0xF0) + i ;
+								if (source == FROM_SERIAL) {
+										MidiUSBWritePacket(&pk2);    // Send to USB
+								} else
+								if (source == FROM_USB) {
+									 SerialWritePacket(&pk2);
+								}
+						}
+					}
+					return;
+			}
+	}
+
+	// Single messages
 	if (source == FROM_SERIAL) {
 			MidiUSBWritePacket(pk);    // Send to USB
 	} else
@@ -882,29 +947,19 @@ static void MidiUSBWritePacket(const midiPacket_t *pk)
 ///////////////////////////////////////////////////////////////////////////////
 static void SerialWritePacket(const midiPacket_t *pk) {
 
-	uint8_t cin   = pk->packet[0] & 0x0F ;
-
-	// Sendpacket to serial at the right size
-	switch (cin) {
-		// 1 byte
-		case 0x05: case 0x0F:
-				RingBuffer_Insert(&USBtoUSART_Buffer, pk->packet[1]);
-        break;
-
-		// 2 bytes
-		case 0x02: case 0x06: case 0x0C: case 0x0D:
-				RingBuffer_Insert(&USBtoUSART_Buffer, pk->packet[1]);
-				RingBuffer_Insert(&USBtoUSART_Buffer, pk->packet[2]);
-        break;
-
-    // 3 bytes
-    case 0x03: case 0x07: case 0x04: case 0x08:
-    case 0x09: case 0x0A: case 0x0B: case 0x0E:
-				RingBuffer_Insert(&USBtoUSART_Buffer, pk->packet[1]);
-				RingBuffer_Insert(&USBtoUSART_Buffer, pk->packet[2]);
-				RingBuffer_Insert(&USBtoUSART_Buffer, pk->packet[3]);
-        break;
+	// Send real time immediatly
+	if ( pk->packet[1] >= 0xF8 ) {
+			Serial_SendByte( pk->packet[1] );
+			return;
 	}
+	// Sendpacket to serial at the right size, with a ring buffer
+	uint8_t msgLen = pgm_read_byte(&CINToLenTable[pk->packet[0] & 0x0F] );
+
+	uint8_t i=1;
+	do {
+			Serial_Insert(pk->packet[i++]);
+	} while (--msgLen);
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -922,6 +977,8 @@ static void SerialWritePacket(const midiPacket_t *pk) {
 //
 // Cmd Description                           Data
 //
+// 08 TEMP REBOOT IN Config menu mode
+// 09 TEMP REBOOT IN Arduino mode
 // 0xA Hard reset interface
 // 0xB Set a new product string		< product String 30 x7 bits char max >
 // 0xC Set VendorID & ProductID   <n1n2n3n4=VendorId > <n1n2n3n4=ProductId>
@@ -952,10 +1009,10 @@ static void ProcessSysExInternal() {
 			HardReset_AVR();
 			break;
 
-		// TEMP REBOOT IN ARDUINO MODE
+		// TEMP REBOOT IN ARDUINO Bootloader MODE
 		// F0 77 77 77 09 F7
 		case 0x09:
-			RebootSerialMode();
+			BootloaderMode();
 			break;
 
 		// RESET USB MIDI INTERFACE
@@ -1012,22 +1069,52 @@ static void ProcessSysExInternal() {
 		// You can pass a variable number of channels, but 16 as a maximum.
 		// Command :
 		// Passing 0x00 will "mute" the channel
-		// Passing 0x7F will reset the mapping to default
 		// Default is 1=>1, 2=2,....16=>16
+
+		// Passing 0x7F after the function ID will reset the mapping to default
 
 		// For example, to map the midi channel 2 to channel 2,5 and 16,
 		// map the channel 3 to channel 4, and mute the channel 16,
-		// send the SYSEX MESSAGES :
+		// then reset to default, send the SYSEX MESSAGES :
 		// F0 77 77 77 0D 02 02 05 10 F7
 		// F0 77 77 77 0D 03 04 F7
 		// F0 77 77 77 0D 10 00 F7
+		// FO 77 77 77 0D 7F F7
 
-			if ( msgLen <3 || msgLen > 18 ) return;
+			if ( msgLen <2 || msgLen > 18 ) return;
 
+			// Default mapping
+			if ( sysExInternalBuffer[2] == 0x7F ) {
+					if (msgLen != 2) return;
+					DefaultChannelMapping();
+					eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
+					return;
+			}
+
+			if ( msgLen < 3 ) return;
+			if ( sysExInternalBuffer[2] < 1 || sysExInternalBuffer[2] > 16 ) return;
+			uint8_t midiIn = sysExInternalBuffer[2] - 1;
+
+			// Mute channel
+			if ( sysExInternalBuffer[3] == 0 ) {
+					if (msgLen != 3) return;
+					EEPROM_Params.midiChannelMap[midiIn] = 0;
+					eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
+					return;
+			}
+
+			// Channel map
+			EEPROM_Params.midiChannelMap[midiIn] = 0;
+			for (uint8_t i=0 ; i < msgLen-2 ; i++) {
+				if ( sysExInternalBuffer[3+i] >= 1 && sysExInternalBuffer[3+i] <=16 ) {
+					EEPROM_Params.midiChannelMap[midiIn] |=	( 1 << (sysExInternalBuffer[3+i]-1) );
+				}
+			}
+			eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
 			break;
 	}
 
-};
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Write the Product String to the EEPROM struct
@@ -1088,7 +1175,7 @@ static uint16_t GetInt16FromHex4Bin(char * buff) {
 ///////////////////////////////////////////////////////////////////////////////
 // Reboot in Arduino serial mode
 ///////////////////////////////////////////////////////////////////////////////
-static void RebootSerialMode() {
+static void BootloaderMode() {
 
 	// Set serial boot mode & Write the whole param struct
 	EEPROM_Params.nextBootMode = bootModeSerial;
@@ -1100,22 +1187,9 @@ static void RebootSerialMode() {
 // Default midi channel mapping
 ///////////////////////////////////////////////////////////////////////////////
 static void DefaultChannelMapping() {
-	EEPROM_Params.midiChannelMap[0]  =	0B0000000000000001;
-	EEPROM_Params.midiChannelMap[1]  =	0B0000000000000010;
-	EEPROM_Params.midiChannelMap[2]  =	0B0000000000000100;
-	EEPROM_Params.midiChannelMap[3]  =	0B0000000000001000;
-	EEPROM_Params.midiChannelMap[4]  =	0B0000000000010000;
-	EEPROM_Params.midiChannelMap[5]  =	0B0000000000100000;
-	EEPROM_Params.midiChannelMap[6]  =	0B0000000001000000;
-	EEPROM_Params.midiChannelMap[7]  =	0B0000000010000000;
-	EEPROM_Params.midiChannelMap[8]  =	0B0000000100000000;
-	EEPROM_Params.midiChannelMap[9]  =	0B0000001000000000;
-	EEPROM_Params.midiChannelMap[10] =	0B0000010000000000;
-	EEPROM_Params.midiChannelMap[11] =	0B0000100000000000;
-	EEPROM_Params.midiChannelMap[12] =	0B0001000000000000;
-	EEPROM_Params.midiChannelMap[13] =	0B0010000000000000;
-	EEPROM_Params.midiChannelMap[14] =	0B0100000000000000;
-	EEPROM_Params.midiChannelMap[15] =	0B1000000000000000;
+
+	for (uint8_t i=0 ; i<16 ; i++ )
+		EEPROM_Params.midiChannelMap[i]  =	( 1 << i );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1123,7 +1197,7 @@ static void DefaultChannelMapping() {
 // received bytes into a circular buffer for later transmission to the host.
 ///////////////////////////////////////////////////////////////////////////////
 // Parse via Arduino/Serial
-ISR(USART1_RX_vect, ISR_BLOCK)
+ISR(USART1_RX_vect)
 {
 	rxByte = UDR1;
 	RingBuffer_Insert(&USARTtoUSB_Buffer, rxByte);

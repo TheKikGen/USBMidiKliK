@@ -12,10 +12,10 @@
 # Run "make help" for target help.
 
 # For Arduino Uno
-MCU          = atmega16u2
+#MCU          = atmega16u2
 
 # For Arduino Pro Micro
-#MCU          = atmega32u4
+MCU          = atmega32u4
 
 ARCH         = AVR8
 BOARD        = UNO
@@ -34,7 +34,7 @@ SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
 LUFA_PATH    = ../../LUFA
 
-CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive
+CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
 
 # From gcc 4.7
 CC_FLAGS     += -std=gnu++11
@@ -43,7 +43,7 @@ CC_FLAGS     += -std=gnu++11
 #CC_FLAGS     += -std=c++0x
 
 # For Arduino Pro Micro
-#CC_FLAGS     += -DSINGLE_BOOT_MODE
+CC_FLAGS     += -DSINGLE_BOOT_MODE
 
 LD_FLAGS     =
 
