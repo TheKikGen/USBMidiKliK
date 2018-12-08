@@ -58,13 +58,13 @@ const uint8_t PROGMEM CINToLenTable[] =
 	1  // 0x0F
 };
 
-// Ring Buffers
+// Ring Buffers. Size not more than 255.
 
-static RingBuffer_t USBtoUSART_Buffer; 															// Circular buffer to hold host data
-static uint8_t      USBtoUSART_Buffer_Data[USB_TO_USART_BUFF_SIZE]; // USB to USART_Buffer
-static RingBuffer_t USARTtoUSB_Buffer;															// Circular buffer to hold data from the serial port
-static uint8_t      USARTtoUSB_Buffer_Data[USART_TO_USB_BUFF_SIZE]; // USART to USB_Buffer
-volatile uint8_t    rxByte;										   										// Used in ISR
+static RingBuff_t USBtoUSART_Buffer; 		 		// Circular buffer to hold host data
+static uint8_t    USBtoUSART_Buffer_Data[USB_TO_USART_BUFF_SIZE] ;  // USB to USART_Buffer
+static RingBuff_t USARTtoUSB_Buffer;		    // Circular buffer to hold data from the serial port
+static uint8_t    USARTtoUSB_Buffer_Data[USART_TO_USB_BUFF_SIZE];   // USART to USB_Buffer
+volatile uint8_t  rxByte;									  // Used in ISR
 
 EEPROM_Params_t  EEPROM_Params;
 
@@ -103,8 +103,7 @@ static void CheckEEPROM() {
 	eeprom_read_block((void*)&EEPROM_Params, (const void*)0, sizeof(EEPROM_Params));
 
 	// If the signature is not found, of not the same version, or new build, then initialize
-	if (
-				memcmp( (const void*)&EEPROM_Params.signature,(const void*)EE_SIGNATURE,sizeof(EEPROM_Params.signature) ) ||
+	if (	memcmp( (const void*)&EEPROM_Params.signature,(const void*)EE_SIGNATURE,sizeof(EEPROM_Params.signature) ) ||
 			  EEPROM_Params.prmVer != EE_PRMVER ||
 				EEPROM_Params.buildNumber != BUILD_NUMBER
 		 )
@@ -544,8 +543,8 @@ void EVENT_CDC_Device_LineEncodingChanged(USB_ClassInfo_CDC_Device_t* const CDCI
 ///////////////////////////////////////////////////////////////////////////////
 static void ProcessSerialUsbMode(void) {
 
-		RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
-		RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
+		RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, USB_TO_USART_BUFF_SIZE);
+		RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, USART_TO_USB_BUFF_SIZE);
 
 		GlobalInterruptEnable();
 
@@ -600,8 +599,8 @@ static void ProcessSerialUsbMode(void) {
 ///////////////////////////////////////////////////////////////////////////////
 static void ProcessMidiUsbMode(void) {
 
-	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, sizeof(USBtoUSART_Buffer_Data));
-	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, sizeof(USARTtoUSB_Buffer_Data));
+	RingBuffer_InitBuffer(&USBtoUSART_Buffer, USBtoUSART_Buffer_Data, USB_TO_USART_BUFF_SIZE);
+	RingBuffer_InitBuffer(&USARTtoUSB_Buffer, USARTtoUSB_Buffer_Data, USART_TO_USB_BUFF_SIZE);
 
   // Enable USART1 receive complete interrupt, transmitter, receiver
 	UCSR1B = 0;
@@ -677,14 +676,17 @@ static void ProcessUsbToMidi(void)
 	MIDI_EventPacket_t MIDIEvent;
 
 	// Do not read the USB Midi command if not enough room in the USART buffer
-	// 3 bytes for an USB Midi event
-	if ( RingBuffer_GetFreeCount(&USBtoUSART_Buffer) < 3 ) return;
+	// or Serial not ready
+
+	if ( RingBuffer_IsFull(&USBtoUSART_Buffer) || !Serial_IsSendReady() ) return;
 
 	/* Check if a MIDI command has been received */
 	if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &MIDIEvent)) {
 				RoutePacketToTarget( FROM_USB,(midiPacket_t *)&MIDIEvent);
 	}
+
 	SerialTask();
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -695,33 +697,20 @@ static void SerialTask(void)
 {
 	if ( RingBuffer_IsEmpty(&USBtoUSART_Buffer) ) return;
 
-	// flush trhe ring buffer to avoid serial contention
-	while ( ! RingBuffer_IsEmpty(&USBtoUSART_Buffer) ) {
-				Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
-				LEDs_TurnOnLEDs(LEDS_LED1);
-				tx_ticks = TICK_COUNT;
-	}
+	Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
+
+	LEDs_TurnOnLEDs(LEDS_LED1);
+	tx_ticks = TICK_COUNT;
 }
 
 static void Serial_Insert(byte sendByte)
 {
-	bool tx = false;
-
-	while ( RingBuffer_IsFull(&USBtoUSART_Buffer) ) {
-					Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
-					tx = true;
-	}
-
+	// Make at less 1 byte room in the ring buffer
+	SerialTask();
 	RingBuffer_Insert(&USBtoUSART_Buffer, sendByte);
-	if (Serial_IsSendReady()) {
-			Serial_SendByte( RingBuffer_Remove(&USBtoUSART_Buffer) );
-			tx = true;
-	}
 
-	if (tx) {
-		LEDs_TurnOnLEDs(LEDS_LED1);
-		tx_ticks = TICK_COUNT;
-	}
+	// Try to send to Serial immediatly if ready only
+	if ( Serial_IsSendReady() ) SerialTask();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -891,6 +880,9 @@ static void RoutePacketToTarget(uint8_t source,const midiPacket_t *pk) {
 
   uint8_t cin   = pk->packet[0] & 0x0F ;
 
+	LEDs_TurnOnLEDs(LEDS_LED2);
+	rx_ticks = TICK_COUNT;
+
 	// Midi channel map - Only on channel msg
 	if ( cin >= 0x08 && cin <= 0x0E ) {
 
@@ -935,9 +927,10 @@ static void RoutePacketToTarget(uint8_t source,const midiPacket_t *pk) {
 ///////////////////////////////////////////////////////////////////////////////
 static void MidiUSBWritePacket(const midiPacket_t *pk)
 {
- 	MIDI_Device_SendEventPacket(&Keyboard_MIDI_Interface, (MIDI_EventPacket_t *) pk);
-	MIDI_Device_Flush(&Keyboard_MIDI_Interface);
 
+// ENDPOINT_RWCSTREAM_NoError
+ 	MIDI_Device_SendEventPacket(&Keyboard_MIDI_Interface, (MIDI_EventPacket_t *) pk);
+	//MIDI_Device_Flush(&Keyboard_MIDI_Interface);
 	LEDs_TurnOnLEDs(LEDS_LED2);
 	rx_ticks = TICK_COUNT;
 }
@@ -950,6 +943,8 @@ static void SerialWritePacket(const midiPacket_t *pk) {
 	// Send real time immediatly
 	if ( pk->packet[1] >= 0xF8 ) {
 			Serial_SendByte( pk->packet[1] );
+			LEDs_TurnOnLEDs(LEDS_LED1);
+			tx_ticks = TICK_COUNT;
 			return;
 	}
 	// Sendpacket to serial at the right size, with a ring buffer

@@ -1,9 +1,21 @@
 /***********************************************************************
- *  arduino_midi firmware, 02.01.2015
- *  by Dimitri Diakopoulos (http://www.dimitridiakopoulos.com)
- *  Based on the LUFA low-level midi example by Dean Camera
- *  (http://www.fourwalledcubicle.com/LUFA.php)
- *  Compiled against LUFA-140928
+ *  ARDUINO_MIDI_DUAL FIRMWARE -
+ *  Franck Touanen - 2017.01.16
+ *
+ *  Based on :
+ *     . The wonderful LUFA low-level midi lib and examples by Dean Camera
+ *               (http://www.fourwalledcubicle.com/LUFA.php)
+ *     . Inspired by HIDUINO from Dimitri Diakopoulos
+ *               (http://www.dimitridiakopoulos.com)
+ *     . Inspired also by dualMocoLUFA Project from morecat_lab
+ *               (http://morecatlab.akiba.coocan.jp/)
+  *
+ *  Compiled against the last LUFA version.
+
+        USB                        ATMEGA8U2                    ATMEGA 328P
+   --------------      ------------------------------         ---------------
+   IN Endpoint  o<-----o USBOUT | usbMidiKliK |  RX o<--------o (TX) MIDI IN
+   OUT Endpoint o----->o USBIN  |  firmware   |  TX o-------->o (RX) MIDI OUT
  ***********************************************************************/
 
 #ifndef _usbmidiklik_h
@@ -27,9 +39,9 @@
 	#include <LUFA/Platform/Platform.h>
 	#include <LUFA/Drivers/Board/LEDs.h>
 	#include <LUFA/Drivers/Board/Board.h>
-	#include <LUFA/Drivers/Misc/RingBuffer.h>
+	//#include <LUFA/Drivers/Misc/RingBuffer.h>
 	#include <LUFA/Drivers/USB/Class/CDCClass.h>
-
+  #include "LightweightRingBuff.h"
 	#include "midiXparser.h"
 	#include "EEPROM_Params.h"
 
@@ -42,7 +54,7 @@
 
 	// Use this 32 bits structure to send and receive packet to/from USB
 	// This is not the standard LUFA midi packet but we use this one
-	// for compatibility resasons on other platforms
+	// for compatibility reasons on other platforms
 	union midiPacket_t {
 	    uint32_t i;
 	    uint8_t  packet[4];

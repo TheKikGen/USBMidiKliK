@@ -1,103 +1,67 @@
 #
-#             LUFA Library
-#     Copyright (C) Dean Camera, 2014.
+#          USBMIDIKLIK (LUFA) Makefile
+#     Copyright (C) TheKikGen Labs , 2018.
 #
-#  dean [at] fourwalledcubicle [dot] com
-#           www.lufa-lib.org
 #
-# --------------------------------------
-#         LUFA Project Makefile.
-# --------------------------------------
 
 # Run "make help" for target help.
 
-# For Arduino Uno
-#MCU          = atmega16u2
 
-# For Arduino Pro Micro
+# COMMON DEFs ================================================================
+
+# From gcc 4.7
+CC_FLAGS     = -std=gnu++11
+# Before gcc 4.7
+#CC_FLAGS     += -std=c++0x
+LD_FLAGS     =
+SOURCE_FILE  = USBMidiKliK_dual
+AVRDUDE_PATH = "/c/Program Files (x86)/Arduino/hardware/tools/avr/bin"
+
+# ARDUINO MICRO / LEONARDO ==================================================
+ifeq ($(TARGET_BOARD),micro)
+TARGET_BOARD = micro
+TARGET       = $(SOURCE_FILE)_$(TARGET_BOARD)
 MCU          = atmega32u4
+CC_FLAGS     += -DSINGLE_BOOT_MODE
+ARCH         = AVR8
+BOARD        = UNO
+# MICRO will not compile....
+#BOARD        = MICRO
+F_CPU        = 16000000
+F_USB        = $(F_CPU)
+OPTIMIZATION = s
+FLASH_COMMAND_LINE = $(AVRDUDE_PATH)/avrdude -v -patmega32u4 -cavr109 -PCOM$(COM) -b57600 -D -V -Uflash:w:./$(TARGET).hex.build:i
 
+# Specify the Vendor ID, Product ID and device name.
+# This is used by Descriptors.c
+ARDUINO_DEVICE_VENDORID							= 0x2912
+ARDUINO_DEVICE_PRODUCTID 						= 0x0001
+ARDUINO_DEVICE_MANUFACTURER_STRING 	= "The KikGen Labs"
+ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Micro dual midi"
+ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
+
+# UNO is the default ========================================================
+else
+TARGET_BOARD = uno
+TARGET       = $(SOURCE_FILE)_$(TARGET_BOARD)
+MCU          = atmega16u2
 ARCH         = AVR8
 BOARD        = UNO
 F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
-TARGET       = USBMidiKliK_dual
-SRC          = 	$(TARGET).cpp Descriptors.c midiXparser.cpp
-SRC          += $(LUFA_SRC_USB)
-SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c
-SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
-SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
-SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
-SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
+FLASH_COMMAND_LINE = avrdude -c usbasp -P usb -b 19200 -p m16u2  -U flash:w:./$(TARGET).hex.build:i
 
-
-LUFA_PATH    = ../../LUFA
-
-CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
-
-# From gcc 4.7
-CC_FLAGS     += -std=gnu++11
-
-# Before gcc 4.7
-#CC_FLAGS     += -std=c++0x
-
-# For Arduino Pro Micro
-CC_FLAGS     += -DSINGLE_BOOT_MODE
-
-LD_FLAGS     =
-
-# ARDUINO libraries
-
-# ARDUINO_PATH = /C/Arduino
-# ARDUINO_CORE = $(ARDUINO_PATH)/hardware/arduino/avr
-# ARDUINO_INC += "-I$(ARDUINO_CORE)/cores/arduino"
-#ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/SoftwareSerial/src"
-# ARDUINO_INC += "-I$(ARDUINO_CORE)/libraries/EEPROM/src"
-# ARDUINO_INC += "-I$(ARDUINO_PATH)/packages/HoodLoader2/hardware/avr/2.0.5/variants/HoodLoader2"
-
-# CC_FLAGS     += $(ARDUINO_INC)
-# CC_FLAGS     += -llib/arduino/libraries/SoftwareSerial/SoftwareSerial.cpp.o
-# CC_FLAGS     += -llib/arduino/core/core.a
-# CC_FLAGS     += -llib/arduino/core/abi.cpp.o
-# CC_FLAGS     += -llib/arduino/core/CDC.cpp.o
-# CC_FLAGS     += -llib/arduino/core/HardwareSerial.cpp.o
-# CC_FLAGS     += -llib/arduino/core/HardwareSerial0.cpp.o
-# CC_FLAGS     += -llib/arduino/core/HardwareSerial1.cpp.o
-# CC_FLAGS     += -llib/arduino/core/HardwareSerial2.cpp.o
-# CC_FLAGS     += -llib/arduino/core/HardwareSerial3.cpp.o
-# CC_FLAGS     += -llib/arduino/core/hooks.c.o
-# CC_FLAGS     += -llib/arduino/core/IPAddress.cpp.o
-# CC_FLAGS     += -llib/arduino/core/main.cpp.o
-# CC_FLAGS     += -llib/arduino/core/new.cpp.o
-# CC_FLAGS     += -llib/arduino/core/PluggableUSB.cpp.o
-# CC_FLAGS     += -llib/arduino/core/Print.cpp.o
-# CC_FLAGS     += -llib/arduino/core/Stream.cpp.o
-# CC_FLAGS     += -llib/arduino/core/Tone.cpp.o
-# CC_FLAGS     += -llib/arduino/core/USBCore.cpp.o
-# CC_FLAGS     += -llib/arduino/core/WInterrupts.c.o
-# CC_FLAGS     += -llib/arduino/core/wiring.c.o
-# CC_FLAGS     += -llib/arduino/core/wiring_analog.c.o
-# CC_FLAGS     += -llib/arduino/core/wiring_digital.c.o
-# CC_FLAGS     += -llib/arduino/core/wiring_pulse.c.o
-# CC_FLAGS     += -llib/arduino/core/wiring_pulse.S.o
-# CC_FLAGS     += -llib/arduino/core/wiring_shift.c.o
-# CC_FLAGS     += -llib/arduino/core/WMath.cpp.o
-# CC_FLAGS     += -llib/arduino/core/WString.cpp.o
-
-
-# ARDUINO DEVICE
 # Specify the Vendor ID, Product ID and device name.
 # This is used by Descriptors.c
-# GENUINE ARDUINO UNO V3
-
 ARDUINO_DEVICE_VENDORID							= 0x2341
-#ARDUINO_DEVICE_PRODUCTID 						= 0x0043
 ARDUINO_DEVICE_PRODUCTID 						= 0x0001
-
 ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino (www.arduino.cc)"
 ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Uno dual midi"
 ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
+endif
+
+# END OF BOARD SPECIFIC DEFs ================================================
 
 # MIDI DEVICE
 # Specify the Vender ID, Product ID and device name.
@@ -105,10 +69,11 @@ ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 
 MIDI_DEVICE_VENDORID								= 0x2912
 MIDI_DEVICE_PRODUCTID 							= 0x1967
-MIDI_DEVICE_MANUFACTURER_STRING 		= "The KikGen MIDI factory"
-# The MIDI_DEVICE_PRODUCT_STRING size must not be changed as it is stored in PROGMEM
-# and can be changed dynamically later...
-MIDI_DEVICE_PRODUCT_STRING 					= "USB MidiKliK $(BUILD_STRING)                       "
+MIDI_DEVICE_MANUFACTURER_STRING 		= "The KikGen Labs"
+
+# The MIDI_DEVICE_PRODUCT_STRING size must not be changed as it is used to set
+# the max size in the USB header PROGMEM structure, and can be changed dynamically later...
+MIDI_DEVICE_PRODUCT_STRING 					= "USB MidiKliK $(BUILD_STRING)                      "
 
 CC_FLAGS     += -DARDUINO_DEVICE_VENDORID=$(ARDUINO_DEVICE_VENDORID)
 CC_FLAGS     += -DARDUINO_DEVICE_PRODUCTID=$(ARDUINO_DEVICE_PRODUCTID)
@@ -122,17 +87,83 @@ CC_FLAGS     += -DMIDI_DEVICE_PRODUCT_STRING=$(MIDI_DEVICE_PRODUCT_STRING)
 CC_FLAGS     += $(BUILD_CFLAGS)
 
 BUILD_NUMBER_FILE=build.txt
+BUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE))
+BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
+BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
+CC_FLAGS     += -DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
+
+# LUFA DEFs ================================================================
+SRC          = 	$(SOURCE_FILE).cpp Descriptors.c midiXparser.cpp
+SRC          += $(LUFA_SRC_USB)
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
+SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
+SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
+
+LUFA_PATH    = ../../LUFA
+CC_FLAGS     += -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
+
+
+
+#=============================================================================
+
+# Default target
+uno:
+		@make build_midiklik TARGET_BOARD=uno
+
+micro:
+		@make build_midiklik TARGET_BOARD=micro
+
+uno_flash:
+		@make uno
+		@make flash_uno
+
+micro_flash:
+		@if make micro
+		@make flash_micro COM=$(COM)
+
+all_target:
+		make purge
+		make clean
+		make uno
+		make clean
+		make micro
+		make clean
+		make purge
+
+build_midiklik:
+		@make buildinc
+		@echo ======================================================================
+		@echo ======== BUILD USBMIDIKLIK - TARGET=$(TARGET_BOARD) - BUILD NO=$(shell cat $(BUILD_NUMBER_FILE)) ========
+		@echo ======================================================================
+		@make all TARGET_BOARD=$(TARGET_BOARD)
+		@make save_bin TARGET_BOARD=$(TARGET_BOARD)
+
+save_bin:
+		@if test -f $(TARGET).hex; then cp -f $(TARGET).hex $(TARGET).hex.build; fi
+
+flash:
+		echo $(FLASH_COMMAND_LINE)
+		$(FLASH_COMMAND_LINE)
+
+flash_uno:
+		make flash TARGET_BOARD=uno
+
+flash_micro:
+		make flash COM=$(COM) TARGET_BOARD=micro
+
+purge:
+		@rm -rf *.elf *.bin *.eep *.hex *.lss *.map *.sym
 
 buildinc:
 		# Create an auto-incrementing build number.
 		@if ! test -f $(BUILD_NUMBER_FILE); then echo 0 > $(BUILD_NUMBER_FILE); fi
 		@echo $$(($$(cat $(BUILD_NUMBER_FILE)) + 1)) > $(BUILD_NUMBER_FILE)
-		make all BUILD_CFLAGS="-DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')"\
-		BUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE)) BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S') \
-		BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 
-# Default target
-all:
+#		make all BUILD_CFLAGS="-DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')"\
+	#	BUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE)) BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S') \
+	#	BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 
 # Include LUFA build script makefiles
 include $(LUFA_PATH)/Build/lufa_core.mk
