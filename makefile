@@ -8,7 +8,7 @@
 
 
 # COMMON DEFs ================================================================
-
+SHELL=sh
 # From gcc 4.7
 CC_FLAGS     = -std=gnu++11
 # Before gcc 4.7
@@ -24,9 +24,7 @@ TARGET       = $(SOURCE_FILE)_$(TARGET_BOARD)
 MCU          = atmega32u4
 CC_FLAGS     += -DSINGLE_BOOT_MODE
 ARCH         = AVR8
-BOARD        = UNO
-# MICRO will not compile....
-#BOARD        = MICRO
+BOARD        = MICRO
 F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s

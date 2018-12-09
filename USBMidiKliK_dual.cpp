@@ -201,9 +201,12 @@ static void SetupHardware(void)
 	// push received bytes to the USB interface
 	TCCR0B = (1 << CS02);
 
+#ifdef AVR_RESET_LINE_PORT
 	/* Pull target /RESET line high */
 	AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
 	AVR_RESET_LINE_DDR  |= AVR_RESET_LINE_MASK;
+#endif
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -483,10 +486,16 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const C
 {
 	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
 
+	#ifdef AVR_RESET_LINE_PORT
+
 	if (CurrentDTRState)
 	  AVR_RESET_LINE_PORT &= ~AVR_RESET_LINE_MASK;
 	else
 	  AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
+
+ #endif
+ 
+
 }
 
 // Event handler for the CDC Class driver Line Encoding Changed event.
