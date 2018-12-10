@@ -71,7 +71,7 @@ If you need to update the Arduino firmware without positionnig a jumper, you can
 To avoid unplugging the USB cable, you cand send this sysex that will do an harware reset programatically.  The full Arduino board will be resetted (ATMEGA8U2 USBMidiKliK firmware + ATMEGA328P and sketch firmware).
 The sysex message structure is the following :
 
-       F0 77 77 77 <sysex function id = 0x0A> F7
+       F0 77 77 77 0A F7
 
 For example to set ProductString, VendorID, Product ID and restart the USB Midi interface with new data, send the following sysex :
 
