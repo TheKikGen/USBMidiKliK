@@ -494,7 +494,7 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const C
 	  AVR_RESET_LINE_PORT |= AVR_RESET_LINE_MASK;
 
  #endif
- 
+
 
 }
 
@@ -619,7 +619,7 @@ static void ProcessMidiUsbMode(void) {
 
 	// Set Midi parser
 	midiSerial.setMidiChannelFilter(midiXparser::allChannel);
-	midiSerial.setMidiMsgFilter( midiXparser::allMidiMsg );
+	midiSerial.setMidiMsgFilter( midiXparser::allMsgTypeMsk );
 	midiSerial.setSysExFilter(true); // Sysex on the fly
 
 	GlobalInterruptEnable();
@@ -737,17 +737,17 @@ static void RouteStdMidiMsg( uint8_t cable, midiXparser* serialMidiParser ) {
     memcpy(&usbMidiPacket.packet[1],&(serialMidiParser->getMidiMsg()[0]),msgLen);
 
     // Real time single byte message CIN F->
-    if ( msgType == midiXparser::realTimeMsgType ) usbMidiPacket.packet[0]   += 0xF;
+    if ( msgType == midiXparser::realTimeMsgTypeMsk ) usbMidiPacket.packet[0]   += 0xF;
     else
 
     // Channel voice message CIN A-E
-    if ( msgType == midiXparser::channelVoiceMsgType )
+    if ( msgType == midiXparser::channelVoiceMsgTypeMsk )
         usbMidiPacket.packet[0]  += ( (serialMidiParser->getMidiMsg()[0]) >> 4);
 
     else
 
     // System common message CIN 2-3
-    if ( msgType == midiXparser::systemCommonMsgType ) {
+    if ( msgType == midiXparser::systemCommonMsgTypeMsk ) {
 
         // 5 -  single-byte system common message (Tune request is the only case)
         if ( msgLen == 1 ) usbMidiPacket.packet[0] += 5;

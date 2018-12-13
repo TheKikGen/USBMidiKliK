@@ -28,7 +28,7 @@ BOARD        = MICRO
 F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
-FLASH_COMMAND_LINE = $(AVRDUDE_PATH)/avrdude -v -patmega32u4 -cavr109 -PCOM$(COM) -b57600 -D -V -Uflash:w:./$(TARGET).hex.build:i
+FLASH_COMMAND_LINE = avrdude -v -patmega32u4 -cavr109 -PCOM$(COM) -b57600 -D -V -Uflash:w:./$(TARGET).hex.build:i
 
 # Specify the Vendor ID, Product ID and device name.
 # This is used by Descriptors.c
