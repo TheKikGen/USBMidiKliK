@@ -618,9 +618,7 @@ static void ProcessMidiUsbMode(void) {
 	PORTB  = 0x0E;	       /* PORTB1 = HIGH (LED ON) */
 
 	// Set Midi parser
-	midiSerial.setMidiChannelFilter(midiXparser::allChannel);
 	midiSerial.setMidiMsgFilter( midiXparser::allMsgTypeMsk );
-	midiSerial.setSysExFilter(true); // Sysex on the fly
 
 	GlobalInterruptEnable();
 
@@ -657,19 +655,23 @@ static void ProcessMidiToUsb()
 	uint8_t receivedByte = RingBuffer_Remove(&USARTtoUSB_Buffer) ;
 
 	if ( midiSerial.parse( receivedByte)) {
-					RouteStdMidiMsg( 0, &midiSerial );
-	}
-	else
-	// Check if a SYSEX msg is currently sent or terminated
-	// as we proceed on the fly.
-	if ( midiSerial.isByteCaptured() &&
-				( midiSerial.isSysExMode() ||
-					midiSerial.getByte() == midiXparser::eoxStatus ||
-					midiSerial.isSysExError()  ) )
-	{
-					// Process for eventual SYSEX unbuffered on the fly
-					RouteSysExMidiMsg(0, &midiSerial) ;
-	}
+
+				// We manage sysEx "on the fly". Clean end of a sysexe msg ?
+ 				if ( midiSerial.getMidiMsgType() == midiXparser::sysExMsgTypeMsk )
+ 					RouteSysExMidiMsg(0, &midiSerial) ;
+
+ 				else // Not a sysex. The message is complete.
+ 					RouteStdMidiMsg( 0, &midiSerial);
+ 	}
+ 	else
+ 	// Acknowledge any sysex error
+ 	if ( midiSerial.isSysExError() )
+ 	 RouteSysExMidiMsg(0, &midiSerial) ;
+ 	else
+ 	// Check if a SYSEX mode active and send bytes on the fly.
+ 	if ( midiSerial.isSysExMode() && midiSerial.isByteCaptured() ) {
+ 		RouteSysExMidiMsg(0, &midiSerial) ;
+ 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -725,16 +727,16 @@ static void Serial_Insert(byte sendByte)
 ///////////////////////////////////////////////////////////////////////////////
 // Route a serial midi msg to the right USB midi cable or other destination
 ///////////////////////////////////////////////////////////////////////////////
-static void RouteStdMidiMsg( uint8_t cable, midiXparser* serialMidiParser ) {
+static void RouteStdMidiMsg( uint8_t cable, midiXparser* xpMidi ) {
 
     midiPacket_t usbMidiPacket;
 
-    uint8_t msgLen = serialMidiParser->getMidiMsgLen();
-    uint8_t msgType = serialMidiParser->getMidiMsgType();
+    uint8_t msgLen = xpMidi->getMidiMsgLen();
+    uint8_t msgType = xpMidi->getMidiMsgType();
 
     usbMidiPacket.i = 0;
     usbMidiPacket.packet[0] = cable << 4;
-    memcpy(&usbMidiPacket.packet[1],&(serialMidiParser->getMidiMsg()[0]),msgLen);
+    memcpy(&usbMidiPacket.packet[1],&(xpMidi->getMidiMsg()[0]),msgLen);
 
     // Real time single byte message CIN F->
     if ( msgType == midiXparser::realTimeMsgTypeMsk ) usbMidiPacket.packet[0]   += 0xF;
@@ -742,7 +744,7 @@ static void RouteStdMidiMsg( uint8_t cable, midiXparser* serialMidiParser ) {
 
     // Channel voice message CIN A-E
     if ( msgType == midiXparser::channelVoiceMsgTypeMsk )
-        usbMidiPacket.packet[0]  += ( (serialMidiParser->getMidiMsg()[0]) >> 4);
+        usbMidiPacket.packet[0]  += ( (xpMidi->getMidiMsg()[0]) >> 4);
 
     else
 
@@ -769,12 +771,12 @@ static void RouteStdMidiMsg( uint8_t cable, midiXparser* serialMidiParser ) {
 // SYSEX Error (not correctly terminated by 0xF7 for example) are cleaned up,
 // to restore a correct parsing state.
 ///////////////////////////////////////////////////////////////////////////////
-static void RouteSysExMidiMsg( uint8_t cable, midiXparser* serialMidiParser) {
+static void RouteSysExMidiMsg( uint8_t cable, midiXparser* xpMidi) {
   static midiPacket_t usbMidiSysExPacket[SERIAL_INTERFACE_MAX];
   static uint8_t packetLen[SERIAL_INTERFACE_MAX];
   static bool firstCall = true;
 
-  byte readByte = serialMidiParser->getByte();
+  byte readByte = xpMidi->getByte();
 
   // Initialize everything at the first call
   if (firstCall ) {
@@ -786,7 +788,7 @@ static void RouteSysExMidiMsg( uint8_t cable, midiXparser* serialMidiParser) {
   // Normal End of SysEx or : End of SysEx with error.
   // Force clean end of SYSEX as the midi usb driver
   // will not understand if we send the packet as is
-  if ( readByte == midiXparser::eoxStatus || serialMidiParser->isSysExError() ) {
+  if ( xpMidi->wasSysExMode() ) {
       // Force the eox byte in case we have a SYSEX error.
       packetLen[cable]++;
       usbMidiSysExPacket[cable].packet[ packetLen[cable] ] = midiXparser::eoxStatus;
@@ -795,23 +797,22 @@ static void RouteSysExMidiMsg( uint8_t cable, midiXparser* serialMidiParser) {
       RoutePacketToTarget( FROM_SERIAL,&usbMidiSysExPacket[cable]);
       packetLen[cable] = 0;
       usbMidiSysExPacket[cable].i = 0;
-  }
-
-  // Stop if not in sysexmode anymore here !
-  // The SYSEX error could be caused by another SOX, or Midi status...,
-  if ( ! serialMidiParser->isSysExMode() ) return;
+			return;
+  } else
 
   // Fill USB sysex packet
-  packetLen[cable]++;
-  usbMidiSysExPacket[cable].packet[ packetLen[cable] ] = readByte ;
+	if ( xpMidi->isSysExMode() ) {
+	  packetLen[cable]++;
+	  usbMidiSysExPacket[cable].packet[ packetLen[cable] ] = readByte ;
 
-  // Packet complete ?
-  if (packetLen[cable] == 3 ) {
-      usbMidiSysExPacket[cable].packet[0] = (cable << 4) + 4 ; // Sysex start or continue
-      RoutePacketToTarget( FROM_SERIAL,&usbMidiSysExPacket[cable]);
-      packetLen[cable] = 0;
-      usbMidiSysExPacket[cable].i = 0;
-  }
+	  // Packet complete ?
+	  if (packetLen[cable] == 3 ) {
+	      usbMidiSysExPacket[cable].packet[0] = (cable << 4) + 4 ; // Sysex start or continue
+	      RoutePacketToTarget( FROM_SERIAL,&usbMidiSysExPacket[cable]);
+	      packetLen[cable] = 0;
+	      usbMidiSysExPacket[cable].i = 0;
+	  }
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

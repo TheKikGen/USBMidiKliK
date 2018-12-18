@@ -90,8 +90,11 @@ BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
 BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 CC_FLAGS     += -DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
 
+
+SRC          = 	$(SOURCE_FILE).cpp Descriptors.c ../midiXparser/midiXparser.cpp
+
 # LUFA DEFs ================================================================
-SRC          = 	$(SOURCE_FILE).cpp Descriptors.c midiXparser.cpp
+
 SRC          += $(LUFA_SRC_USB)
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/CDCClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/CDCClassHost.c
@@ -99,7 +102,7 @@ SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
 SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
-LUFA_PATH    = ../../LUFA
+LUFA_PATH    = ../lufa/LUFA
 CC_FLAGS     += -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
 
 
