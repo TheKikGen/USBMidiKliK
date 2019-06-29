@@ -32,6 +32,28 @@ If your project is a pure USB MIDI controller, simply setup serial to 31250 baud
 
 TTL/Serial MIDI IN and MIDI OUT conversion schematics can be found easily on the web.
 
+# Build Instructions
+
+## Prerequisits
+
+- git
+- fish shell
+
+## Build Dependencies
+
+These can be automatically downloaded and prepared by executing
+
+	$ ./scripts/init.fish
+
+If dependencies change, it might be necessary to delete them and download them anew:
+
+	$ rm -rf ./dependencies
+	$ ./scripts/init.fish
+
+## Build
+
+	$ make [goal]
+
 # System Exclusive messages
 
 Sysex have the following format :
