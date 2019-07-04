@@ -38,6 +38,26 @@ ARDUINO_DEVICE_MANUFACTURER_STRING 	= "The KikGen Labs"
 ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Micro dual midi"
 ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 
+# ARDUINO MEGA ========================================================
+else ifeq ($(TARGET_BOARD),mega)
+TARGET_BOARD = mega
+TARGET       = $(SOURCE_FILE)_$(TARGET_BOARD)
+MCU          = atmega16u2
+ARCH         = AVR8
+BOARD        = UNO
+F_CPU        = 16000000
+F_USB        = $(F_CPU)
+OPTIMIZATION = s
+FLASH_COMMAND_LINE = avrdude -c usbasp -P usb -b 19200 -p m16u2  -U flash:w:./$(TARGET).hex.build:i
+
+# Specify the Vendor ID, Product ID and device name.
+# This is used by Descriptors.c
+ARDUINO_DEVICE_VENDORID							= 0x2341
+ARDUINO_DEVICE_PRODUCTID 						= 0x0042
+ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino (www.arduino.cc)"
+ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Mega dual midi"
+ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
+
 # UNO is the default ========================================================
 else
 TARGET_BOARD = uno
@@ -91,7 +111,8 @@ BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 CC_FLAGS     += -DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
 
 
-SRC          = 	$(SOURCE_FILE).cpp Descriptors.c ../midiXparser/midiXparser.cpp
+DEP_DIR      = dependencies
+SRC          = 	$(SOURCE_FILE).cpp Descriptors.c $(DEP_DIR)/midiXparser/midiXparser.cpp
 
 # LUFA DEFs ================================================================
 
@@ -102,7 +123,7 @@ SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
 SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
-LUFA_PATH    = ../lufa/LUFA
+LUFA_PATH    = $(DEP_DIR)/lufa/LUFA
 CC_FLAGS     += -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
 
 
@@ -112,6 +133,9 @@ CC_FLAGS     += -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
 # Default target
 uno:
 		@make build_midiklik TARGET_BOARD=uno
+
+mega:
+		@make build_midiklik TARGET_BOARD=mega
 
 micro:
 		@make build_midiklik TARGET_BOARD=micro
@@ -128,6 +152,8 @@ all_target:
 		make purge
 		make clean
 		make uno
+		make clean
+		make mega
 		make clean
 		make micro
 		make clean
