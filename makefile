@@ -119,8 +119,8 @@ BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
 BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 CC_FLAGS     += -DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
 
-
 SRC          = 	$(SOURCE_FILE).cpp Descriptors.c $(MIDI_XPARSER)/midiXparser.cpp
+CC_FLAGS     += -I$(MIDI_XPARSER)
 
 # LUFA DEFs ================================================================
 
