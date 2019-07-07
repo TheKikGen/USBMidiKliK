@@ -4,8 +4,8 @@
 #
 #
 
-# Run "make help" for target help.
-
+# Run "make help" for LUFA target help.
+# Run "make mdkhelp" for USBMIDIKLIK target help.
 
 # COMMON DEFs ================================================================
 SHELL=sh
@@ -16,6 +16,15 @@ CC_FLAGS     = -std=gnu++11
 LD_FLAGS     =
 SOURCE_FILE  = USBMidiKliK_dual
 AVRDUDE_PATH = "/c/Program Files (x86)/Arduino/hardware/tools/avr/bin"
+COM = 4
+
+# DEPENDANCIES. You must download these packages to compile
+
+# https://github.com/TheKikGen/midiXparser
+# https://github.com/abcminiuser/lufa
+
+LUFA_PATH    = ../lufa/LUFA
+MIDI_XPARSER = ../midiXparser
 
 # ARDUINO MICRO / LEONARDO ==================================================
 ifeq ($(TARGET_BOARD),micro)
@@ -36,6 +45,26 @@ ARDUINO_DEVICE_VENDORID							= 0x2912
 ARDUINO_DEVICE_PRODUCTID 						= 0x0001
 ARDUINO_DEVICE_MANUFACTURER_STRING 	= "The KikGen Labs"
 ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Micro dual midi"
+ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
+
+# ARDUINO MEGA ========================================================
+else ifeq ($(TARGET_BOARD),mega)
+TARGET_BOARD = mega
+TARGET       = $(SOURCE_FILE)_$(TARGET_BOARD)
+MCU          = atmega16u2
+ARCH         = AVR8
+BOARD        = UNO
+F_CPU        = 16000000
+F_USB        = $(F_CPU)
+OPTIMIZATION = s
+FLASH_COMMAND_LINE = avrdude -c usbasp -P usb -b 19200 -p m16u2  -U flash:w:./$(TARGET).hex.build:i
+
+# Specify the Vendor ID, Product ID and device name.
+# This is used by Descriptors.c
+ARDUINO_DEVICE_VENDORID							= 0x2341
+ARDUINO_DEVICE_PRODUCTID 						= 0x0042
+ARDUINO_DEVICE_MANUFACTURER_STRING 	= "Arduino (www.arduino.cc)"
+ARDUINO_DEVICE_PRODUCT_STRING 			= "Arduino Mega dual midi"
 ARDUINO_DEVICE_PRODUCT_SERIAL 			= "55732323430351718180"
 
 # UNO is the default ========================================================
@@ -91,7 +120,7 @@ BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
 CC_FLAGS     += -DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')
 
 
-SRC          = 	$(SOURCE_FILE).cpp Descriptors.c ../midiXparser/midiXparser.cpp
+SRC          = 	$(SOURCE_FILE).cpp Descriptors.c $(MIDI_XPARSER)/midiXparser.cpp
 
 # LUFA DEFs ================================================================
 
@@ -102,16 +131,16 @@ SRC          += $(LUFA_PATH)/Drivers/USB/Class/Device/MIDIClassDevice.c
 SRC          += $(LUFA_PATH)/Drivers/USB/Class/Host/MIDIClassHost.c
 SRC          += $(LUFA_PATH)/Drivers/Peripheral/AVR8/Serial_AVR8.c
 
-LUFA_PATH    = ../lufa/LUFA
 CC_FLAGS     += -DUSE_LUFA_CONFIG_HEADER -IConfig/ -fpermissive -Os
-
-
 
 #=============================================================================
 
 # Default target
 uno:
 		@make build_midiklik TARGET_BOARD=uno
+
+mega:
+		@make build_midiklik TARGET_BOARD=mega
 
 micro:
 		@make build_midiklik TARGET_BOARD=micro
@@ -121,13 +150,15 @@ uno_flash:
 		@make flash_uno
 
 micro_flash:
-		@if make micro
+		@make micro
 		@make flash_micro COM=$(COM)
 
 all_target:
 		make purge
 		make clean
 		make uno
+		make clean
+		make mega
 		make clean
 		make micro
 		make clean
@@ -162,9 +193,25 @@ buildinc:
 		@if ! test -f $(BUILD_NUMBER_FILE); then echo 0 > $(BUILD_NUMBER_FILE); fi
 		@echo $$(($$(cat $(BUILD_NUMBER_FILE)) + 1)) > $(BUILD_NUMBER_FILE)
 
-#		make all BUILD_CFLAGS="-DBUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE) ) -DBUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S')"\
-	#	BUILD_NUMBER=$(shell cat $(BUILD_NUMBER_FILE)) BUILD_DATE=$(shell date +'%Y.%m.%d-%H:%M:%S') \
-	#	BUILD_STRING=Build-$(shell cat $(BUILD_NUMBER_FILE))
+mdkhelp:
+		@echo ======================================================================
+		@echo USBMIDIKLIK MAKE HELP
+		@echo ======================================================================
+		@echo
+		@echo make uno, mega, micro, all_target.......: Build the specified target or all targets.
+		@echo
+		@echo make uno_flash..........................: Make and flash for Uno with FLASH_COMMAND_LINE
+		@echo
+		@echo make micro_flash........................: Make and flash for Micro at comm port COM$(COM)
+		@echo
+		@echo make purge..............................: Delete all files created by compilation process
+		@echo
+		@echo NB : You need to 'make clean' before compiling for a different target.
+		@echo
+		@echo Dependancies :
+		@echo Current LUFA path is       : $(LUFA_PATH)
+		@echo Current mdiXParser path is : $(MIDI_XPARSER)
+		@echo
 
 # Include LUFA build script makefiles
 include $(LUFA_PATH)/Build/lufa_core.mk
