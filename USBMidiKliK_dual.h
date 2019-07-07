@@ -42,7 +42,7 @@
 	//#include <LUFA/Drivers/Misc/RingBuffer.h>
 	#include <LUFA/Drivers/USB/Class/CDCClass.h>
   #include "LightweightRingBuff.h"
-	#include "../midiXparser/midiXparser.h"
+	#include <midiXparser.h>
 	#include "EEPROM_Params.h"
 
 	// Number of MIDI jacks (also number of cables by construction)
