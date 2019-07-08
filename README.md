@@ -8,6 +8,7 @@ USBMidiKliK uses interrupts and ring buffers to ensure that (fast) USB to (slow)
 
 This firmware is uploaded in the ATMEGA8U2 chip managing the USB, and changes the default USB serial descriptors to the MIDI ones.
 For more convenience when updates are needed, a "dual mode" is embedded, allowing to switch back to the USB serial : when the PB2/MOSI pin of the ATMEGA8U2 is connected to ground, the Arduino is a classical one again, and you can change and upload a new firmware in the ATMEGA328P (UNO) with the standard Arduino IDE.
+
 <img border="0" src="https://https://image.tubefr.com/upload/4/28/428246e5f47d82268003693e084d05e2.jpg"  />
 
 Obviously, it is also possible to upload this firmware to other members of the Arduino family, like the Arduino Micro for example.
