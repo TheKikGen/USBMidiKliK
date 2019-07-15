@@ -15,7 +15,8 @@ Obviously, it is also possible to upload this firmware to other members of the A
 
 With a Uno, in a "MIDI USB converter" mode, data flow are the following :
 
-                                                                            ATMEGA 328P
+	                     -------------------------------- ARDUINO UNO -------------------
+                                                                           ATMEGA 328P
            USB                          ATMEGA8U2                        UART NOT ACTIVE
        -------------         ------------------------------          ------------------------
        IN Endpoint  o<-----o | USBOUT  (usbMidiKliK )  RX | o<-----o |  (TX) pinMode(INPUT) | o<-----  MIDI IN
