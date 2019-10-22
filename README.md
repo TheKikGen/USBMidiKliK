@@ -1,5 +1,13 @@
+
+        __ __| |           |  /_) |     ___|             |           |
+           |   __ \   _ \  ' /  | |  / |      _ \ __ \   |      _` | __ \   __|
+           |   | | |  __/  . \  |   <  |   |  __/ |   |  |     (   | |   |\__ \
+          _|  _| |_|\___| _|\_\_|_|\_\\____|\___|_|  _| _____|\__,_|_.__/ ____/
+
 # USBMidiKliK
 A robust USB MIDI Arduino firmware, with a dual bootloader, based on the last version of the LUFA library.
+
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?token=PdKvcb8qIp5iXrCirZrtZCZOlMWJfgtkOTJIl9Qc7NGhr6a4AC27w6wYkrGsG5m5Xp9EXW&country.x=US&locale.x=US)
 
 As other project, like HIDUINO, or MOCOLUFA (thanks to them for inspiration), USBMIDIKLIK allows your Arduino board to become a very reliable MIDI IN/OUT USB interface.  Despite the very good work done on these projects, i was facing some issues...
 An heavy MIDI traffic (sysex...) was blocking the serial, and some MIDI messages were purely ignored by the parser, like the song pointer position for example. More, these projects rely on a quite old version of the LUFA library.
