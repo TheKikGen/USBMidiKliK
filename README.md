@@ -25,13 +25,16 @@ Obviously, it is also possible to upload this firmware to other members of the A
 
 With a Uno, in a "MIDI USB converter" mode, data flow are the following :
 
+````
+		     ----------- ARDUINO UNO ----------------------------------------
+								   ATMEGA 328P
+   USB                          ATMEGA8U2                        UART NOT ACTIVE
+-------------         ------------------------------          ------------------------
+IN Endpoint  o<-----o | USBOUT  (usbMidiKliK )  RX | o<-----o |  (TX) pinMode(INPUT) | o<-----  MIDI IN
+OUT Endpoint o----->o | USBIN   ( firmware   )  TX | o----->o |  (RX) pinMode(INPUT) | o----->  MIDI OUT   
 
-                             ----------- ARDUINO UNO ----------------------------------------
-                                                                           ATMEGA 328P
-           USB                          ATMEGA8U2                        UART NOT ACTIVE
-       -------------         ------------------------------          ------------------------
-       IN Endpoint  o<-----o | USBOUT  (usbMidiKliK )  RX | o<-----o |  (TX) pinMode(INPUT) | o<-----  MIDI IN
-       OUT Endpoint o----->o | USBIN   ( firmware   )  TX | o----->o |  (RX) pinMode(INPUT) | o----->  MIDI OUT   
+````
+
 
 If you need USB to talk with external MIDI IN/OUT (with DIN jacks), the RX/TX on the ATMEGA328P must no be crossed, as the ATMEGA8U2 TX/RX are hardwired to these RX and TX pins on the Uno board.  When PIN0 (RX on the Arduino board socket) and PIN1 (TX on the Arduino board) are configured as INPUT, external devices can talk directly with the ATMEGA8U2 managing the USB, making the Arduino UART transparent.
 
