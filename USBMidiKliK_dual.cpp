@@ -1057,7 +1057,7 @@ static void ProcessSysExInternal() {
 
 				if ( msgLen != 9 ) return;
 
-				EEPROM_Params.vendorID = GetInt16FromHex4Bin((char *) &sysExInternalBuffer[3]);
+				EEPROM_Params.vendorID = GetInt16FromHex4Bin((char *) &sysExInternalBuffer[2]);
 				EEPROM_Params.productID= GetInt16FromHex4Bin((char *) &sysExInternalBuffer[6]);
 				eeprom_write_block((void*)&EEPROM_Params, (void*)0 , sizeof(EEPROM_Params));
 
