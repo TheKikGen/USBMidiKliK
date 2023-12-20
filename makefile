@@ -23,8 +23,8 @@ COM = 4
 # https://github.com/TheKikGen/midiXparser
 # https://github.com/abcminiuser/lufa
 
-LUFA_PATH    = ../lufa/LUFA
-MIDI_XPARSER = ../midiXparser
+LUFA_PATH    = ./lufa/LUFA
+MIDI_XPARSER = ./midiXparser
 
 # ARDUINO MICRO / LEONARDO ==================================================
 ifeq ($(TARGET_BOARD),micro)

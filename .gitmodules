@@ -1,0 +1,6 @@
+[submodule "lufa"]
+	path = lufa
+	url = https://github.com/abcminiuser/lufa
+[submodule "midiXparser"]
+	path = midiXparser
+	url = https://github.com/TheKikGen/midiXparser
