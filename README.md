@@ -192,3 +192,18 @@ map the channel 3 to channel 4, and mute the channel 16, send the SYSEX MESSAGES
 		F0 77 77 77 0D 02 02 05 10 F7
 		F0 77 77 77 0D 03 04 F7
 		F0 77 77 77 0D 10 00 F7
+
+## How to compile the firmware
+
+1. You must have the WINAVR or gcc-avr installed on your computer.
+
+`sudo apt-get install gcc-avr binutils-avr avr-libc gdb-avr avrdude`
+
+2. Clone the USBMidiKlik source code and its submodules lufa and midiXparser : 
+
+`git clone --recurse-submodules https://github.com/TheKikGen/USBMidiKliK`
+
+3. To build for uno, use 'make uno'.
+
+To get help, use 'make mdkhelp'.
+

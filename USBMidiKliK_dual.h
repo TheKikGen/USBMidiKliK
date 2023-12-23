@@ -1,6 +1,6 @@
 /***********************************************************************
  *  ARDUINO_MIDI_DUAL FIRMWARE -
- *  Franck Touanen - 2017.01.16
+ *  TheKikGen Labs - 2017.01.16
  *
  *  Based on :
  *     . The wonderful LUFA low-level midi lib and examples by Dean Camera
